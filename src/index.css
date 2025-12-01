@@ -1,0 +1,99 @@
+/* Fuente moderna */
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;600;700&display=swap');
+
+:root {
+  --primary: #0077b6;
+  --secondary: #00b4d8;
+  --bg-color: #f4f7f6; /* Gris azulado suave y profesional */
+  --text-color: #333;
+}
+
+body {
+  font-family: 'Montserrat', sans-serif;
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+}
+
+/* Títulos */
+h1, h2, h3, h4 {
+  color: #023e8a;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+/* Tarjetas de Noticias */
+.news-card {
+  border: none;
+  border-radius: 16px;
+  background: white;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  overflow: hidden;
+  height: 100%;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+}
+
+.news-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 15px 30px rgba(0, 119, 182, 0.2);
+}
+
+/* Etiquetas */
+.badge-cultural {
+  background-color: #0096c7;
+  color: white;
+}
+.badge-entretenimiento {
+  background-color: #ffb703;
+  color: #333;
+}
+
+/* Botones */
+.btn-primary-gradient {
+  background: linear-gradient(45deg, #0077b6, #00b4d8);
+  border: none;
+  color: white;
+  padding: 10px 25px;
+  border-radius: 50px;
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.85rem;
+  letter-spacing: 1px;
+}
+
+.btn-primary-gradient:hover {
+  background: linear-gradient(45deg, #023e8a, #0077b6);
+  color: white;
+  box-shadow: 0 4px 12px rgba(0, 119, 182, 0.4);
+}
+
+/* --- SKELETON LOADING ANIMATION --- */
+.skeleton {
+  background-color: #e0e0e0;
+  border-radius: 4px;
+  position: relative;
+  overflow: hidden;
+}
+
+.skeleton::after {
+  content: "";
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+  animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.skeleton-text { height: 16px; margin-bottom: 8px; width: 100%; }
+.skeleton-title { height: 24px; margin-bottom: 15px; width: 80%; }
+.skeleton-img { height: 200px; width: 100%; margin-bottom: 15px; }
