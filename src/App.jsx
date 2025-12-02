@@ -5,6 +5,8 @@ import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from './firebase/config';
 import { ShieldAlert, LogOut, Home } from 'lucide-react';
+import AboutPage from './pages/AboutPage';
+import PrivacyPage from './pages/PrivacyPage';
 
 // Páginas
 import HomePage from './pages/HomePage';
@@ -101,6 +103,8 @@ function App() {
             <Route path="/" element={<HomePage />} />
             <Route path="/post/:id" element={<PostDetail />} />
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/about" element={<AboutPage />} />
+            <Route path="/privacy" element={<PrivacyPage />} />
             
             {/* RUTA PARA CREAR PERFIL */}
             <Route path="/create-profile" element={<CreateProfile />} />

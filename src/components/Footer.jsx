@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-// Importamos los íconos de Lucide
-import { Home, Drama, Film, Facebook, Instagram, Twitter, Youtube, Mail } from 'lucide-react';
+// Importamos los íconos de Lucide (Agregué Users y ShieldCheck)
+import { Home, Drama, Film, Facebook, Instagram, Twitter, Youtube, Mail, Users, ShieldCheck } from 'lucide-react';
 
 export default function Footer() {
   
@@ -42,6 +42,16 @@ export default function Footer() {
                   <Film size={16} /> Entretenimiento
                 </Link>
               </li>
+              <li className="mb-2">
+                <Link to="/about" onClick={scrollTop} className="text-white-50 text-decoration-none hover-white d-flex align-items-center gap-2">
+                  <Users size={16} /> Quiénes Somos
+                </Link>
+              </li>
+              <li className="mb-2">
+                <Link to="/privacy" onClick={scrollTop} className="text-white-50 text-decoration-none hover-white d-flex align-items-center gap-2">
+                  <ShieldCheck size={16} /> Privacidad
+                </Link>
+              </li>
             </ul>
           </div>
 
@@ -49,51 +59,10 @@ export default function Footer() {
           <div className="col-md-4">
             <h5 className="fw-bold mb-3">Síguenos en Redes</h5>
             <div className="d-flex gap-3">
-              
-              {/* FACEBOOK */}
-              <a 
-                href="https://www.facebook.com/xiomysofy.dlosreyes" 
-                target="_blank" 
-                rel="noopener noreferrer" 
-                className="text-white"
-                title="Facebook"
-              >
-                <Facebook size={24} />
-              </a>
-
-              {/* INSTAGRAM */}
-              <a 
-                href="https://www.instagram.com/azulmarcaribe.link" 
-                target="_blank" 
-                rel="noopener noreferrer" 
-                className="text-white"
-                title="Instagram"
-              >
-                <Instagram size={24} />
-              </a>
-
-              {/* TWITTER (X) */}
-              <a 
-                href="https://x.com/xiomysofy" 
-                target="_blank" 
-                rel="noopener noreferrer" 
-                className="text-white"
-                title="X (Twitter)"
-              >
-                <Twitter size={24} />
-              </a>
-
-              {/* YOUTUBE */}
-              <a 
-                href="https://youtube.com/@zulmarcaribe" 
-                target="_blank" 
-                rel="noopener noreferrer" 
-                className="text-white"
-                title="YouTube"
-              >
-                <Youtube size={24} />
-              </a>
-
+              <a href="https://www.facebook.com/xiomysofy.dlosreyes" target="_blank" rel="noopener noreferrer" className="text-white" title="Facebook"><Facebook size={24} /></a>
+              <a href="https://www.instagram.com/azulmarcaribe.link" target="_blank" rel="noopener noreferrer" className="text-white" title="Instagram"><Instagram size={24} /></a>
+              <a href="https://x.com/xiomysofy" target="_blank" rel="noopener noreferrer" className="text-white" title="X (Twitter)"><Twitter size={24} /></a>
+              <a href="https://youtube.com/@zulmarcaribe" target="_blank" rel="noopener noreferrer" className="text-white" title="YouTube"><Youtube size={24} /></a>
             </div>
             <p className="text-white-50 small mt-3 d-flex align-items-center gap-2">
               <Mail size={16} /> Contacto: Xiomysofy24@gmail.com
