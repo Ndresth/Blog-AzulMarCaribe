@@ -1,25 +1,27 @@
 import React, { useState, useEffect } from 'react';
-import { db } from '../firebase/config';
+import { db, storage, auth } from '../firebase/config'; // Importamos storage y auth
 import { collection, addDoc, updateDoc, doc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'; // Funciones de Storage
 import { 
   Editor, EditorProvider, Toolbar, 
   BtnBold, BtnItalic, BtnUnderline, 
   BtnBulletList, BtnNumberedList, 
   BtnClearFormatting 
 } from 'react-simple-wysiwyg';
-// Importamos íconos de Lucide
-import { Link as LinkIcon, Send, RefreshCw } from 'lucide-react';
+import { Link as LinkIcon, Send, RefreshCw, Image as ImageIcon, UploadCloud } from 'lucide-react';
 
 export default function BlogForm({ onPostCreated, postToEdit, onCancel, onNotify }) {
   const [formData, setFormData] = useState({
     titulo: '',
     categoria: 'Cultural',
-    imagen: '',
+    imagen: '', // Aquí guardaremos la URL final
     contenido: ''
   });
+  
+  const [file, setFile] = useState(null); // Estado para el archivo físico
   const [loading, setLoading] = useState(false);
   
-  // Estado para el Modal de Insertar Link
+  // Estados para el editor de texto
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [linkUrl, setLinkUrl] = useState('');
   const [savedRange, setSavedRange] = useState(null);
@@ -34,6 +36,7 @@ export default function BlogForm({ onPostCreated, postToEdit, onCancel, onNotify
       });
     } else {
         setFormData({ titulo: '', categoria: 'Cultural', imagen: '', contenido: '' });
+        setFile(null);
     }
   }, [postToEdit]);
 
@@ -45,12 +48,17 @@ export default function BlogForm({ onPostCreated, postToEdit, onCancel, onNotify
     setFormData({ ...formData, contenido: e.target.value });
   };
 
-  // --- LÓGICA DE FORMATO ---
-  const applyBlockStyle = (tag) => {
-    document.execCommand('formatBlock', false, tag);
+  // Manejo del archivo de imagen
+  const handleFileChange = (e) => {
+    if (e.target.files[0]) {
+        setFile(e.target.files[0]);
+        // Creamos una URL temporal para la vista previa
+        setFormData({ ...formData, imagen: URL.createObjectURL(e.target.files[0]) });
+    }
   };
 
-  // --- LÓGICA DE LINK PERSONALIZADO ---
+  const applyBlockStyle = (tag) => document.execCommand('formatBlock', false, tag);
+
   const openLinkModal = () => {
     const selection = window.getSelection();
     if (selection.rangeCount > 0) {
@@ -70,31 +78,52 @@ export default function BlogForm({ onPostCreated, postToEdit, onCancel, onNotify
     setShowLinkModal(false);
     setLinkUrl('');
   };
-  // ---------------------------
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      if (postToEdit) {
-        const docRef = doc(db, "posts", postToEdit.id);
-        await updateDoc(docRef, { ...formData });
-        onNotify("Noticia actualizada correctamente");
-      } else {
-        await addDoc(collection(db, "posts"), {
-          ...formData,
-          fecha: Date.now()
-        });
-        onNotify("Noticia publicada con éxito");
+      let imageUrl = formData.imagen;
+
+      // 1. Si hay un archivo nuevo seleccionado, lo subimos a Firebase Storage
+      if (file) {
+        const storageRef = ref(storage, `blog_images/${Date.now()}_${file.name}`);
+        const snapshot = await uploadBytes(storageRef, file);
+        imageUrl = await getDownloadURL(snapshot.ref); // Obtenemos la URL de internet
       }
 
+      // 2. Obtenemos el usuario actual para firmar la noticia
+      const user = auth.currentUser;
+      const autor = user.displayName || user.email; // Usamos su nombre de Google o el correo
+
+      const datosFinales = {
+        ...formData,
+        imagen: imageUrl, // Guardamos la URL real de la nube
+        autor: autor      // Guardamos quién lo escribió
+      };
+
+      if (postToEdit) {
+        const docRef = doc(db, "posts", postToEdit.id);
+        await updateDoc(docRef, datosFinales);
+        onNotify("✅ Noticia actualizada correctamente");
+      } else {
+        await addDoc(collection(db, "posts"), {
+          ...datosFinales,
+          fecha: Date.now()
+        });
+        onNotify("✅ Noticia publicada con éxito");
+      }
+
+      // Limpiar todo
       setFormData({ titulo: '', categoria: 'Cultural', imagen: '', contenido: '' });
+      setFile(null);
+      
       if(onPostCreated) onPostCreated();
 
     } catch (error) {
       console.error("Error:", error);
-      onNotify("Error al guardar la noticia");
+      onNotify("❌ Error al guardar la noticia");
     } finally {
       setLoading(false);
     }
@@ -118,9 +147,35 @@ export default function BlogForm({ onPostCreated, postToEdit, onCancel, onNotify
                   </select>
               </div>
 
+              {/* INPUT DE ARCHIVO MEJORADO */}
               <div className="col-12">
-                  <label className="form-label fw-bold small text-muted">IMAGEN (URL)</label>
-                  <input type="text" name="imagen" className="form-control" placeholder="https://..." value={formData.imagen} onChange={handleChange} />
+                  <label className="form-label fw-bold small text-muted">IMAGEN DE PORTADA</label>
+                  <div className="border rounded p-3 text-center bg-light" style={{borderStyle: 'dashed'}}>
+                      <input 
+                        type="file" 
+                        id="fileInput" 
+                        className="d-none" 
+                        accept="image/*" 
+                        onChange={handleFileChange} 
+                      />
+                      
+                      {formData.imagen ? (
+                          <div className="position-relative d-inline-block">
+                              <img src={formData.imagen} alt="Preview" className="img-fluid rounded shadow-sm" style={{maxHeight: '200px'}} />
+                              <button 
+                                type="button"
+                                className="btn btn-sm btn-danger position-absolute top-0 end-0 m-1 rounded-circle"
+                                onClick={() => { setFile(null); setFormData({...formData, imagen: ''}) }}
+                              >
+                                <RefreshCw size={14}/>
+                              </button>
+                          </div>
+                      ) : (
+                          <label htmlFor="fileInput" className="btn btn-outline-primary cursor-pointer d-flex align-items-center justify-content-center gap-2" style={{cursor: 'pointer'}}>
+                              <UploadCloud size={20} /> Subir imagen desde tu PC
+                          </label>
+                      )}
+                  </div>
               </div>
 
               <div className="col-12">
@@ -134,23 +189,15 @@ export default function BlogForm({ onPostCreated, postToEdit, onCancel, onNotify
                           containerProps={{ style: { height: '100%' } }}
                         >
                           <Toolbar>
-                            <button type="button" onClick={() => applyBlockStyle('h2')} className="rsw-btn fw-bold" title="Título Grande">H1</button>
-                            <button type="button" onClick={() => applyBlockStyle('h3')} className="rsw-btn fw-bold" title="Subtítulo">H2</button>
-                            <button type="button" onClick={() => applyBlockStyle('p')} className="rsw-btn" title="Texto Normal">P</button>
+                            <button type="button" onClick={() => applyBlockStyle('h2')} className="rsw-btn fw-bold">H1</button>
+                            <button type="button" onClick={() => applyBlockStyle('h3')} className="rsw-btn fw-bold">H2</button>
+                            <button type="button" onClick={() => applyBlockStyle('p')} className="rsw-btn">P</button>
                             <span style={{width:'1px', background:'#ddd', margin:'0 5px'}}></span>
-                            
-                            <BtnBold title="Negrita"/>
-                            <BtnItalic title="Cursiva"/>
-                            <BtnUnderline title="Subrayado"/>
-                            <BtnBulletList title="Lista puntos"/>
-                            <BtnNumberedList title="Lista numérica"/>
-                            
-                            {/* BOTÓN DE LINK PERSONALIZADO */}
-                            <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={openLinkModal} className="rsw-btn" title="Insertar Enlace">
+                            <BtnBold /><BtnItalic /><BtnUnderline /><BtnBulletList /><BtnNumberedList />
+                            <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={openLinkModal} className="rsw-btn">
                                 <LinkIcon size={18} />
                             </button>
-                            
-                            <BtnClearFormatting title="Limpiar"/>
+                            <BtnClearFormatting />
                           </Toolbar>
                         </Editor>
                       </EditorProvider>
@@ -160,19 +207,11 @@ export default function BlogForm({ onPostCreated, postToEdit, onCancel, onNotify
               <div className="col-12 d-flex justify-content-end gap-2 mt-3">
                   {postToEdit && (
                       <button type="button" className="btn btn-secondary px-4 rounded-pill" onClick={onCancel}>
-                          Cancelar Edición
+                          Cancelar
                       </button>
                   )}
                   <button type="submit" className={`btn ${postToEdit ? 'btn-warning' : 'btn-primary'} fw-bold px-4 rounded-pill d-flex align-items-center gap-2`} disabled={loading}>
-                      {loading ? (
-                        <>
-                          <RefreshCw className="animate-spin" size={18} /> Guardando...
-                        </>
-                      ) : (
-                        <>
-                          {postToEdit ? 'Actualizar Noticia' : 'Publicar Noticia'} <Send size={18} />
-                        </>
-                      )}
+                      {loading ? <><RefreshCw className="animate-spin" size={18} /> Subiendo...</> : <><Send size={18} /> {postToEdit ? 'Actualizar' : 'Publicar'}</>}
                   </button>
               </div>
           </div>
@@ -186,21 +225,9 @@ export default function BlogForm({ onPostCreated, postToEdit, onCancel, onNotify
             <div className="modal fade show d-block" style={{zIndex: 1070}}>
                 <div className="modal-dialog modal-dialog-centered">
                     <div className="modal-content">
-                        <div className="modal-header">
-                            <h5 className="modal-title d-flex align-items-center gap-2">
-                              <LinkIcon size={20} /> Insertar Enlace
-                            </h5>
-                            <button type="button" className="btn-close" onClick={() => setShowLinkModal(false)}></button>
-                        </div>
+                        <div className="modal-header"><h5 className="modal-title">Insertar Enlace</h5></div>
                         <div className="modal-body">
-                            <label className="form-label">URL del enlace:</label>
-                            <input 
-                                type="text" 
-                                className="form-control" 
-                                value={linkUrl} 
-                                onChange={(e) => setLinkUrl(e.target.value)}
-                                autoFocus
-                            />
+                            <input type="text" className="form-control" value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} autoFocus placeholder="https://..." />
                         </div>
                         <div className="modal-footer">
                             <button type="button" className="btn btn-secondary" onClick={() => setShowLinkModal(false)}>Cancelar</button>

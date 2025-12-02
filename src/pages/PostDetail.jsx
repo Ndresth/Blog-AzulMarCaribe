@@ -5,7 +5,6 @@ import { doc, getDoc, collection, addDoc, deleteDoc, onSnapshot, query, orderBy,
 import { Helmet } from 'react-helmet-async';
 // Componentes
 import ShareButtons from '../components/ShareButtons';
-import PostSkeleton from '../components/PostSkeleton'; // Reutilizamos el skeleton para carga suave
 // Íconos
 import { ArrowLeft, MessageSquare, Send, User, Trash2, Calendar, Sparkles } from 'lucide-react';
 
@@ -19,9 +18,10 @@ export default function PostDetail() {
   const [nuevoComentario, setNuevoComentario] = useState({ autor: '', texto: '' });
 
   const user = auth.currentUser;
-  const isAdmin = !!user; 
+  // Lista de correos admin (o simplemente si hay usuario logueado, según tu preferencia)
+  const isAdmin = !!user && user.email === "yamithadresjulio@gmail.com"; 
 
-  // 1. CARGAR NOTICIA ACTUAL
+  // 1. CARGAR NOTICIA ACTUAL Y RELACIONADAS
   useEffect(() => {
     const getPost = async () => {
       setLoading(true);
@@ -32,7 +32,7 @@ export default function PostDetail() {
         if (docSnap.exists()) {
             const data = { id: docSnap.id, ...docSnap.data() };
             setPost(data);
-            // Una vez tenemos el post, cargamos las relacionadas
+            // Una vez tenemos el post, buscamos las relacionadas
             fetchRelacionadas(data.categoria, data.id);
         } else {
             console.log("No existe el documento");
@@ -45,7 +45,7 @@ export default function PostDetail() {
     window.scrollTo(0, 0);
   }, [id]);
 
-  // 2. FUNCIÓN PARA CARGAR RELACIONADAS
+  // 2. FUNCIÓN PARA BUSCAR RELACIONADAS
   const fetchRelacionadas = async (categoria, currentId) => {
     try {
         const postsRef = collection(db, "posts");
@@ -59,12 +59,13 @@ export default function PostDetail() {
         const snapshot = await getDocs(q);
         const docs = snapshot.docs
             .map(doc => ({ id: doc.id, ...doc.data() }))
-            .filter(doc => doc.id !== currentId) // Quitamos la noticia actual
+            .filter(doc => doc.id !== currentId) // Quitamos la noticia actual de la lista
             .slice(0, 3); // Dejamos solo 3
 
         setRelacionadas(docs);
     } catch (error) {
-        console.error("Error cargando relacionadas (Posible falta de índice):", error);
+        // Si sale error de índice en consola, dale clic al link que te da Firebase
+        console.error("Error cargando relacionadas:", error);
     }
   };
 
@@ -98,21 +99,16 @@ export default function PostDetail() {
     return new Date(timestamp).toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' });
   }
 
-  // --- RENDER ---
-
-  if (loading) return <div className="container py-5"><div className="spinner-border text-primary"></div></div>;
+  if (loading) return <div className="container py-5 text-center"><div className="spinner-border text-primary"></div></div>;
   if (!post) return <div className="container py-5 text-center"><h3>Noticia no encontrada</h3><Link to="/">Volver</Link></div>;
 
   return (
-    <div className="container py-5">
+    <div className="container py-5" style={{maxWidth: '900px'}}>
       
-      {/* SEO AVANZADO (Open Graph para WhatsApp) */}
+      {/* SEO AVANZADO (Open Graph) */}
       <Helmet>
         <title>{post.titulo} | Azul Mar Caribe</title>
         <meta name="description" content={post.contenido.substring(0, 150)} />
-        
-        {/* Facebook / WhatsApp */}
-        <meta property="og:type" content="article" />
         <meta property="og:title" content={post.titulo} />
         <meta property="og:description" content={post.contenido.substring(0, 150)} />
         <meta property="og:image" content={post.imagen || "https://via.placeholder.com/800"} />
@@ -120,7 +116,7 @@ export default function PostDetail() {
       </Helmet>
 
       <div className="row justify-content-center">
-        <div className="col-lg-8">
+        <div className="col-lg-10">
             
             {/* BOTÓN VOLVER */}
             <Link to="/" className="btn btn-light mb-4 shadow-sm fw-bold text-primary px-4 rounded-pill d-inline-flex align-items-center gap-2">
@@ -139,32 +135,44 @@ export default function PostDetail() {
                 </div>
                 
                 <h1 className="fw-bold mb-4 display-5 text-dark" style={{letterSpacing: '-1px'}}>{post.titulo}</h1>
+
+                {/* AUTOR */}
+                <div className="d-flex align-items-center gap-2 mb-4 text-muted">
+                    <div className="bg-light rounded-circle p-2"><User size={18} /></div>
+                    <span className="small fw-bold">Por: {post.autor || "Redacción"}</span>
+                </div>
                 
                 {post.imagen && (
                     <img src={post.imagen} className="img-fluid rounded-4 shadow-sm mb-4 w-100" style={{maxHeight:'500px', objectFit:'cover'}} alt={post.titulo} onError={(e) => e.target.src = "https://via.placeholder.com/800x400?text=Azul+Mar+Caribe"} />
                 )}
                 
-                <div style={{lineHeight: '1.9', fontSize: '1.15rem', color: '#333'}} dangerouslySetInnerHTML={{ __html: post.contenido }} />
+                {/* Contenido HTML */}
+                <div 
+                    style={{lineHeight: '1.9', fontSize: '1.15rem', color: '#333'}}
+                    dangerouslySetInnerHTML={{ __html: post.contenido }}
+                />
 
+                {/* BOTONES DE COMPARTIR */}
                 <div className="mt-5">
                     <ShareButtons title={post.titulo} />
                 </div>
             </article>
 
-            {/* --- SECCIÓN NOTICIAS RELACIONADAS --- */}
+            {/* --- NOTICIAS RELACIONADAS --- */}
             {relacionadas.length > 0 && (
                 <section className="mb-5">
-                    <h4 className="fw-bold mb-4 d-flex align-items-center gap-2">
-                        <Sparkles className="text-warning" /> También te podría interesar
+                    <h4 className="fw-bold mb-4 d-flex align-items-center gap-2 text-dark">
+                        <Sparkles className="text-warning" fill="orange" /> También te podría interesar
                     </h4>
                     <div className="row g-3">
                         {relacionadas.map(rel => (
                             <div key={rel.id} className="col-md-4">
                                 <Link to={`/post/${rel.id}`} className="text-decoration-none text-dark">
                                     <div className="card h-100 border-0 shadow-sm hover-effect">
-                                        <img src={rel.imagen} alt={rel.titulo} className="card-img-top" style={{height:'120px', objectFit:'cover'}} />
+                                        <img src={rel.imagen} alt={rel.titulo} className="card-img-top" style={{height:'140px', objectFit:'cover'}} onError={(e) => e.target.src = "https://via.placeholder.com/400"} />
                                         <div className="card-body p-3">
-                                            <h6 className="card-title fw-bold mb-0" style={{fontSize: '0.9rem'}}>{rel.titulo}</h6>
+                                            <span className="badge bg-light text-secondary border mb-2" style={{fontSize:'0.7rem'}}>{rel.categoria}</span>
+                                            <h6 className="card-title fw-bold mb-0" style={{fontSize: '0.95rem', lineHeight: '1.4'}}>{rel.titulo}</h6>
                                         </div>
                                     </div>
                                 </Link>
