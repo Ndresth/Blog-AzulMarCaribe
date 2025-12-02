@@ -26,7 +26,17 @@ export default function PostDetail() {
   // Solo es admin si existe el usuario Y su correo está en la lista
   const isAdmin = user && adminsAutorizados.includes(user.email); 
   // --------------------------------
-
+<Helmet>
+        <title>{post.titulo} | Azul Mar Caribe</title>
+        <meta name="description" content={post.contenido.substring(0, 150)} />
+        
+        {/* ESTO ES LO QUE HACE LA MAGIA EN WHATSAPP */}
+        <meta property="og:type" content="article" />
+        <meta property="og:title" content={post.titulo} />
+        <meta property="og:description" content={post.contenido.substring(0, 150)} />
+        <meta property="og:image" content={post.imagen} /> {/* Aquí va la foto */}
+        <meta property="og:url" content={window.location.href} />
+      </Helmet>
   // 1. Cargar Noticia
   useEffect(() => {
     const getPost = async () => {
