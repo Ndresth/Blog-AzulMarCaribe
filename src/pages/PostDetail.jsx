@@ -1,25 +1,21 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { db, auth } from '../firebase/config'; 
-// Importamos updateDoc e increment para los Likes
-import { doc, getDoc, collection, addDoc, deleteDoc, updateDoc, increment, onSnapshot, query, orderBy, where, limit, getDocs } from 'firebase/firestore';
+// Quitamos updateDoc e increment que eran para los likes
+import { doc, getDoc, collection, addDoc, deleteDoc, onSnapshot, query, orderBy, where, limit, getDocs } from 'firebase/firestore';
 import { Helmet } from 'react-helmet-async';
 import ShareButtons from '../components/ShareButtons';
-// Importamos el Corazón
-import { ArrowLeft, MessageSquare, Send, User, Trash2, Calendar, Sparkles, Heart } from 'lucide-react';
+// Quitamos el ícono Heart
+import { ArrowLeft, MessageSquare, Send, User, Trash2, Calendar, Sparkles } from 'lucide-react';
 
 export default function PostDetail() {
   const { id } = useParams();
   const [post, setPost] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [relacionadas, setRelacionadas] = useState([]); 
+  const [relacionadas, setRelacionadas] = useState([]);
   
   const [comentarios, setComentarios] = useState([]);
   const [nuevoComentario, setNuevoComentario] = useState({ autor: '', texto: '' });
-
-  // Estado para los Likes
-  const [likes, setLikes] = useState(0);
-  const [hasLiked, setHasLiked] = useState(false); // Para saber si el usuario ya dio like en esta sesión
 
   const user = auth.currentUser;
   const adminsAutorizados = ["yamithadresjulio@gmail.com", "xiomysofy24@gmail.com"];
@@ -36,7 +32,6 @@ export default function PostDetail() {
         if (docSnap.exists()) {
             const data = { id: docSnap.id, ...docSnap.data() };
             setPost(data);
-            setLikes(data.likes || 0); // Cargamos los likes existentes
             fetchRelacionadas(data.categoria, data.id);
         } else {
             console.log("No existe el documento");
@@ -46,9 +41,9 @@ export default function PostDetail() {
     };
     getPost();
     window.scrollTo(0, 0);
-    setHasLiked(false); // Reseteamos el like al cambiar de noticia
   }, [id]);
 
+  // 2. RELACIONADAS
   const fetchRelacionadas = async (categoria, currentId) => {
     try {
         const postsRef = collection(db, "posts");
@@ -68,7 +63,7 @@ export default function PostDetail() {
     } catch (error) { console.error("Error cargando relacionadas:", error); }
   };
 
-  // 2. COMENTARIOS
+  // 3. COMENTARIOS
   useEffect(() => {
     const commentsRef = collection(db, "posts", id, "comments");
     const q = query(commentsRef, orderBy("fecha", "desc"));
@@ -77,26 +72,6 @@ export default function PostDetail() {
     });
     return () => unsubscribe();
   }, [id]);
-
-  // --- LÓGICA DEL LIKE ---
-  const handleLike = async () => {
-    if (hasLiked) return; // Si ya dio like, no hace nada
-
-    // Actualización optimista (Visualmente se ve rápido)
-    setLikes(prev => prev + 1);
-    setHasLiked(true);
-
-    try {
-        const postRef = doc(db, "posts", id);
-        await updateDoc(postRef, {
-            likes: increment(1) // Sumamos 1 en la base de datos de forma atómica
-        });
-    } catch (error) {
-        console.error("Error dando like:", error);
-        setLikes(prev => prev - 1); // Revertimos si falla
-        setHasLiked(false);
-    }
-  };
 
   const handleSubmitComentario = async (e) => {
     e.preventDefault();
@@ -121,7 +96,6 @@ export default function PostDetail() {
   if (loading) return <div className="container py-5 text-center"><div className="spinner-border text-primary"></div></div>;
   if (!post) return <div className="container py-5 text-center"><h3>Noticia no encontrada</h3><Link to="/">Volver</Link></div>;
 
-  // Preparar SEO
   const seoTitle = post ? post.titulo : "Noticia";
   const seoDesc = post ? post.contenido.substring(0, 150) : "";
   const seoImage = post?.imagen || "https://blog-azulmarcaribe.netlify.app/logo.png";
@@ -169,24 +143,8 @@ export default function PostDetail() {
             dangerouslySetInnerHTML={{ __html: post.contenido }}
         />
 
-        {/* --- ZONA DE INTERACCIÓN (LIKES Y COMPARTIR) --- */}
-        <div className="mt-5 d-flex flex-column flex-md-row gap-3 align-items-center justify-content-between border-top pt-4">
-            
-            {/* BOTÓN ME GUSTA */}
-            <button 
-                onClick={handleLike}
-                className={`btn rounded-pill px-4 py-2 fw-bold d-flex align-items-center gap-2 transition-all ${hasLiked ? 'btn-danger' : 'btn-outline-danger'}`}
-                style={{transition: 'all 0.2s'}}
-                disabled={hasLiked} // Desactivar si ya votó
-            >
-                <Heart size={20} fill={hasLiked ? "currentColor" : "none"} />
-                {hasLiked ? '¡Te gusta!' : 'Me gusta'} 
-                <span className="badge bg-white text-danger ms-1 rounded-pill">{likes}</span>
-            </button>
-
-            <div className="w-100 w-md-auto">
-                <ShareButtons title={post.titulo} />
-            </div>
+        <div className="mt-5">
+            <ShareButtons title={post.titulo} />
         </div>
       </article>
 
