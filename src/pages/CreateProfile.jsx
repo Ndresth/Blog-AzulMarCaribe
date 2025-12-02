@@ -62,7 +62,7 @@ export default function CreateProfile() {
                 <input 
                     type="text" 
                     className="form-control form-control-lg" 
-                    placeholder="Ej: Yamith Julio"
+                    placeholder=""
                     value={nombre}
                     onChange={(e) => setNombre(e.target.value)}
                     autoFocus

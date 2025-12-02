@@ -12,7 +12,7 @@ import AdminPanel from './pages/AdminPanel';
 import LoginPage from './pages/LoginPage';
 import PostDetail from './pages/PostDetail';
 import NotFoundPage from './pages/NotFoundPage';
-import CreateProfile from './pages/CreateProfile'; // <--- NUEVA PÁGINA
+import CreateProfile from './pages/CreateProfile';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 
@@ -32,17 +32,23 @@ const ProtectedRoute = ({ children }) => {
       if (usuarioFirebase) {
         setCurrentUser(usuarioFirebase);
         
-        // 1. Verificar correo
         if (adminsAutorizados.includes(usuarioFirebase.email)) {
             
-            // 2. VERIFICAR SI YA CREÓ SU PERFIL EN LA BASE DE DATOS
-            const docRef = doc(db, "users", usuarioFirebase.uid);
-            const docSnap = await getDoc(docRef);
+            try {
+                // Buscamos si tiene perfil creado
+                const docRef = doc(db, "users", usuarioFirebase.uid);
+                const docSnap = await getDoc(docRef);
 
-            if (docSnap.exists()) {
-                setStatus('authorized'); // Tiene perfil, pasa.
-            } else {
-                setStatus('no_profile'); // Correo bien, pero falta perfil.
+                if (docSnap.exists()) {
+                    setStatus('authorized'); // Tiene perfil, pasa.
+                } else {
+                    // Si no existe, o si hubo error antes, lo mandamos a crear
+                    setStatus('no_profile'); 
+                }
+            } catch (error) {
+                console.error("Error verificando perfil:", error);
+                // En caso de error (como permisos), asumimos que falta perfil para no bloquear
+                setStatus('no_profile');
             }
 
         } else {
@@ -96,7 +102,7 @@ function App() {
             <Route path="/post/:id" element={<PostDetail />} />
             <Route path="/login" element={<LoginPage />} />
             
-            {/* RUTA PARA CREAR PERFIL (Solo accesible si estás logueado pero sin perfil) */}
+            {/* RUTA PARA CREAR PERFIL */}
             <Route path="/create-profile" element={<CreateProfile />} />
 
             <Route path="/admin" element={
