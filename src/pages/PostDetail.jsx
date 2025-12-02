@@ -2,15 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { db, auth } from '../firebase/config'; 
 import { 
-  doc, getDoc, collection, addDoc, deleteDoc, setDoc, // Necesario para crear el like con ID específico
+  doc, getDoc, collection, addDoc, deleteDoc, setDoc, 
   onSnapshot, query, orderBy, where, limit, getDocs, 
   updateDoc, increment 
 } from 'firebase/firestore';
 import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from 'firebase/auth';
 import { Helmet } from 'react-helmet-async';
 import ShareButtons from '../components/ShareButtons';
-// Importamos el Corazón de nuevo
-import { ArrowLeft, MessageSquare, Send, User, Trash2, Calendar, Sparkles, Heart } from 'lucide-react';
+import { ArrowLeft, MessageSquare, Send, User, Trash2, Calendar, Sparkles, Heart, LogIn } from 'lucide-react';
 
 export default function PostDetail() {
   const { id } = useParams();
@@ -19,14 +18,14 @@ export default function PostDetail() {
   const [relacionadas, setRelacionadas] = useState([]); 
   
   const [comentarios, setComentarios] = useState([]);
-  const [nuevoComentario, setNuevoComentario] = useState({ autor: '', texto: '' });
   
-  // ESTADOS DE LIKES Y USUARIO
+  // CORRECCIÓN 1: El comentario ahora es solo TEXTO simple, no un objeto.
+  const [nuevoComentario, setNuevoComentario] = useState('');
+  
   const [currentUser, setCurrentUser] = useState(null);
   const [likes, setLikes] = useState(0);
-  const [hasLiked, setHasLiked] = useState(false); // ¿Ya votó?
+  const [hasLiked, setHasLiked] = useState(false);
 
-  // Detectar usuario
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
@@ -37,17 +36,18 @@ export default function PostDetail() {
   const adminsAutorizados = ["yamithadresjulio@gmail.com", "xiomysofy24@gmail.com"];
   const isAdmin = currentUser && adminsAutorizados.includes(currentUser.email); 
 
-  // 1. LOGIN CON GOOGLE
+  // CORRECCIÓN 2: Login silencioso (sin alertas feas)
   const handleLogin = async () => {
     const provider = new GoogleAuthProvider();
     try {
       await signInWithPopup(auth, provider);
+      // No necesitamos hacer nada más, el useEffect detectará el usuario y actualizará la vista
     } catch (error) {
-      console.error("Error login:", error);
+      console.error("Login cancelado o fallido", error);
     }
   };
 
-  // 2. CARGAR NOTICIA
+  // CARGAR NOTICIA
   useEffect(() => {
     const getPost = async () => {
       setLoading(true);
@@ -57,34 +57,28 @@ export default function PostDetail() {
         if (docSnap.exists()) {
             const data = { id: docSnap.id, ...docSnap.data() };
             setPost(data);
-            setLikes(data.likes || 0); // Cargar contador total de likes
+            setLikes(data.likes || 0); 
             fetchRelacionadas(data.categoria, data.id);
         } else {
             console.log("No existe");
             setPost(null);
         }
-      } catch (error) { 
-        console.error("Error cargando post:", error); 
-      } finally { 
-        setLoading(false); 
-      }
+      } catch (error) { console.error(error); } finally { setLoading(false); }
     };
     getPost();
     window.scrollTo(0, 0);
   }, [id]);
 
-  // --- 3. VERIFICAR SI YO YA DI LIKE (El Cerebro) ---
+  // VERIFICAR LIKE
   useEffect(() => {
     if (currentUser && id) {
         const checkUserLike = async () => {
-            // Buscamos en la carpeta 'likes' el documento con MI nombre (uid)
             const likeRef = doc(db, "posts", id, "likes", currentUser.uid);
             const likeSnap = await getDoc(likeRef);
-            
             if (likeSnap.exists()) {
-                setHasLiked(true); // Ya di like
+                setHasLiked(true);
             } else {
-                setHasLiked(false); // No he dado like
+                setHasLiked(false);
             }
         };
         checkUserLike();
@@ -93,7 +87,7 @@ export default function PostDetail() {
     }
   }, [currentUser, id]);
 
-  // 4. RELACIONADAS
+  // RELACIONADAS
   const fetchRelacionadas = async (categoria, currentId) => {
     try {
         const postsRef = collection(db, "posts");
@@ -101,12 +95,10 @@ export default function PostDetail() {
         const snapshot = await getDocs(q);
         const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() })).filter(d => d.id !== currentId).slice(0, 3);
         setRelacionadas(docs);
-    } catch (error) { 
-        console.error("Error cargando relacionadas:", error); 
-    }
+    } catch (error) { console.error(error); }
   };
 
-  // 5. COMENTARIOS
+  // COMENTARIOS
   useEffect(() => {
     const commentsRef = collection(db, "posts", id, "comments");
     const q = query(commentsRef, orderBy("fecha", "desc"));
@@ -116,67 +108,54 @@ export default function PostDetail() {
     return () => unsubscribe();
   }, [id]);
 
-  // --- 6. MANEJO INTELIGENTE DEL LIKE ---
+  // DAR LIKE
   const handleLike = async () => {
-    if (!currentUser) return handleLogin(); // Si no está logueado, pedimos login
+    if (!currentUser) return handleLogin(); 
     
-    // Referencias a la base de datos
     const postRef = doc(db, "posts", id);
-    const likeRef = doc(db, "posts", id, "likes", currentUser.uid); // EL DOCUMENTO SE LLAMA IGUAL QUE EL USUARIO
+    const likeRef = doc(db, "posts", id, "likes", currentUser.uid);
 
     try {
         if (hasLiked) {
-            // SI YA TIENE LIKE -> LO QUITAMOS (Dislike)
-            setLikes(prev => prev - 1); // Actualizamos visualmente rápido
+            setLikes(prev => prev - 1); 
             setHasLiked(false);
-            
-            // Borramos el registro del usuario
             await deleteDoc(likeRef);
-            // Restamos 1 al contador global
             await updateDoc(postRef, { likes: increment(-1) });
-
         } else {
-            // SI NO TIENE LIKE -> LO PONEMOS
-            setLikes(prev => prev + 1); // Actualizamos visualmente rápido
+            setLikes(prev => prev + 1);
             setHasLiked(true);
-
-            // Creamos el registro con el ID del usuario
-            await setDoc(likeRef, {
-                uid: currentUser.uid,
-                fecha: Date.now()
-            });
-            // Sumamos 1 al contador global
+            await setDoc(likeRef, { uid: currentUser.uid });
             await updateDoc(postRef, { likes: increment(1) });
         }
     } catch (error) {
-        console.error("Error en like:", error);
-        // Si falla algo en la red, revertimos el cambio visual para no engañar al usuario
+        console.error("Error like:", error);
         setLikes(prev => hasLiked ? prev + 1 : prev - 1);
         setHasLiked(!hasLiked);
     }
   };
 
-  // 7. PUBLICAR COMENTARIO
+  // PUBLICAR COMENTARIO
   const handleSubmitComentario = async (e) => {
     e.preventDefault();
-    if (!nuevoComentario.trim()) return;
+    if (!nuevoComentario.trim()) return; // Verificamos que no esté vacío
     
     try {
+      // CORRECCIÓN 3: Guardamos el texto directamente
       await addDoc(collection(db, "posts", id, "comments"), {
         autor: currentUser.displayName || "Usuario", 
         email: currentUser.email, 
-        texto: nuevoComentario,
+        texto: nuevoComentario, // Aquí va el string limpio
         fecha: Date.now()
       });
       setNuevoComentario('');
-    } catch (error) { console.error("Error al comentar:", error); }
+    } catch (error) { console.error("Error:", error); }
   };
 
   const handleDeleteComment = async (commentId) => {
     if(window.confirm("¿Borrar comentario?")) {
         try {
             await deleteDoc(doc(db, "posts", id, "comments", commentId));
-        } catch (error) { console.error("Error borrando:", error); }
+        } catch (error) { console.error(error); }
     }
   }
 
@@ -198,11 +177,9 @@ export default function PostDetail() {
       <Helmet>
         <title>{seoTitle} | Azul Mar Caribe</title>
         <meta name="description" content={seoDesc} />
-        <meta property="og:type" content="article" />
         <meta property="og:title" content={seoTitle} />
         <meta property="og:description" content={seoDesc} />
         <meta property="og:image" content={seoImage} />
-        <meta property="og:url" content={window.location.href} />
       </Helmet>
 
       <Link to="/" className="btn btn-light mb-4 shadow-sm fw-bold text-primary px-4 rounded-pill d-inline-flex align-items-center gap-2">
@@ -215,8 +192,7 @@ export default function PostDetail() {
             <small className="text-muted d-flex align-items-center gap-1"><Calendar size={14} /> {formatearFecha(post.fecha)}</small>
         </div>
         
-        <h1 className="fw-bold mb-4 display-5 text-dark" style={{letterSpacing: '-1px'}}>{post.titulo}</h1>
-        
+        <h1 className="fw-bold mb-4 display-5 text-dark">{post.titulo}</h1>
         <div className="d-flex align-items-center gap-2 mb-4 text-muted">
             <div className="bg-light rounded-circle p-2"><User size={18} /></div>
             <span className="small fw-bold">Por: {post.autor || "Redacción"}</span>
@@ -226,24 +202,20 @@ export default function PostDetail() {
         
         <div style={{lineHeight: '1.9', fontSize: '1.15rem', color: '#333'}} dangerouslySetInnerHTML={{ __html: post.contenido }} />
 
-        {/* --- ZONA DE LIKES Y COMPARTIR --- */}
         <div className="mt-5 d-flex flex-column flex-md-row gap-3 align-items-center justify-content-between border-top pt-4">
             <button 
                 onClick={handleLike}
-                // Cambia de color si ya diste like
                 className={`btn rounded-pill px-4 py-2 fw-bold d-flex align-items-center gap-2 transition-all ${hasLiked ? 'btn-danger' : 'btn-outline-danger'}`}
             >
-                {/* Rellena el corazón si ya diste like */}
                 <Heart size={20} fill={hasLiked ? "currentColor" : "none"} />
-                {hasLiked ? '¡Te gusta!' : 'Me gusta'} 
+                {hasLiked ? 'Te gusta' : 'Me gusta'} 
                 <span className="badge bg-white text-danger ms-1 rounded-pill border border-danger">{likes}</span>
             </button>
             <div className="w-100 w-md-auto"><ShareButtons title={post.titulo} /></div>
         </div>
       </article>
 
-      {/* ... SECCIONES RELACIONADAS Y COMENTARIOS (Sin cambios) ... */}
-      
+      {/* Relacionadas aquí... (igual que antes) */}
       {relacionadas.length > 0 && (
         <section className="mb-5">
             <h4 className="fw-bold mb-4 d-flex align-items-center gap-2 text-dark"><Sparkles className="text-warning" fill="orange" /> También te podría interesar</h4>
@@ -252,7 +224,7 @@ export default function PostDetail() {
                     <div key={rel.id} className="col-md-4">
                         <Link to={`/post/${rel.id}`} className="text-decoration-none text-dark">
                             <div className="card h-100 border-0 shadow-sm hover-effect">
-                                <img src={rel.imagen} alt={rel.titulo} className="card-img-top" style={{height:'120px', objectFit:'cover'}} onError={(e) => e.target.src = "https://via.placeholder.com/400"} />
+                                <img src={rel.imagen} alt={rel.titulo} className="card-img-top" style={{height:'120px', objectFit:'cover'}} />
                                 <div className="card-body p-3"><h6 className="card-title fw-bold mb-0" style={{fontSize: '0.9rem'}}>{rel.titulo}</h6></div>
                             </div>
                         </Link>
@@ -274,7 +246,14 @@ export default function PostDetail() {
                     <span className="fw-bold text-dark">Comentando como: {currentUser.displayName}</span>
                 </div>
                 <div className="mb-3">
-                    <textarea className="form-control border-0 shadow-sm" rows="3" placeholder="¿Qué opinas?" value={nuevoComentario} onChange={(e) => setNuevoComentario(e.target.value)}></textarea>
+                    {/* Input simple para texto */}
+                    <textarea 
+                        className="form-control border-0 shadow-sm" 
+                        rows="3" 
+                        placeholder="¿Qué opinas?" 
+                        value={nuevoComentario} 
+                        onChange={(e) => setNuevoComentario(e.target.value)}
+                    ></textarea>
                 </div>
                 <div className="text-end">
                     <button type="submit" className="btn btn-primary fw-bold px-4 rounded-pill d-inline-flex align-items-center gap-2"><Send size={16} /> Publicar</button>
@@ -284,7 +263,7 @@ export default function PostDetail() {
             <div className="text-center py-4 mb-5 bg-light rounded-3 border">
                 <p className="text-muted mb-3">Para dejar un comentario o dar Like, necesitas iniciar sesión.</p>
                 <button onClick={handleLogin} className="btn btn-dark rounded-pill px-4 d-inline-flex align-items-center gap-2">
-                    <img src="https://www.svgrepo.com/show/475656/google-color.svg" width="20" alt="G" /> Iniciar sesión con Google
+                    <LogIn size={20} /> Iniciar sesión con Google
                 </button>
             </div>
         )}
@@ -306,6 +285,7 @@ export default function PostDetail() {
                     </div>
                 </div>
             ))}
+            {comentarios.length === 0 && <p className="text-center text-muted py-3">Sé el primero en opinar.</p>}
         </div>
       </section>
     </div>
