@@ -95,7 +95,7 @@ export default function BlogForm({ onPostCreated, postToEdit, onCancel, onNotify
 
       // 2. Obtenemos el usuario actual para firmar la noticia
       const user = auth.currentUser;
-      const autor = user.displayName || user.email; // Usamos su nombre de Google o el correo
+      const autor = user.displayName || "Redacción"; // Usamos su nombre de Google o el correo
 
       const datosFinales = {
         ...formData,
