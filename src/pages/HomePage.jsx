@@ -5,6 +5,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { Search, Film, Drama, Globe, BookOpen, ArrowDownCircle } from 'lucide-react'; 
 import PostSkeleton from '../components/PostSkeleton'; 
+import NewsTicker from '../components/NewsTicker';
 
 export default function HomePage() {
   const [noticias, setNoticias] = useState([]);
@@ -143,6 +144,8 @@ export default function HomePage() {
         <title>Azul Mar Caribe | {categoriaActual}</title>
         <link rel="icon" type="image/png" href="/logo.png" />
       </Helmet>
+      
+      <NewsTicker />
 
       {/* HEADER */}
       <div className="bg-white py-5 mb-5 shadow-sm" style={{borderBottom: '5px solid #00b4d8'}}>

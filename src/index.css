@@ -97,3 +97,40 @@ h1, h2, h3, h4 {
 .skeleton-text { height: 16px; margin-bottom: 8px; width: 100%; }
 .skeleton-title { height: 24px; margin-bottom: 15px; width: 80%; }
 .skeleton-img { height: 200px; width: 100%; margin-bottom: 15px; }
+
+/* --- ANIMACIÓN DEL TICKER DE NOTICIAS --- */
+.news-ticker-container {
+  overflow: hidden;
+  white-space: nowrap;
+  position: relative;
+}
+
+.news-ticker-content {
+  display: inline-block;
+  white-space: nowrap;
+  animation: ticker 20s linear infinite; /* Ajusta 20s para más rápido/lento */
+}
+
+.news-ticker-content:hover {
+  animation-play-state: paused; /* Se detiene si pones el mouse encima */
+}
+
+@keyframes ticker {
+  0% { transform: translateX(100%); }
+  100% { transform: translateX(-100%); }
+}
+
+.ticker-item {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 40px;
+  color: #333;
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+.ticker-item:hover {
+  color: #0077b6; /* Azul al pasar el mouse */
+  text-decoration: underline;
+}
