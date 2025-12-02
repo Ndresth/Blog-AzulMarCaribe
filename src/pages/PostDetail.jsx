@@ -1,12 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { db, auth } from '../firebase/config'; 
-// Importaciones limpias
-import { doc, getDoc, collection, addDoc, deleteDoc, onSnapshot, query, orderBy, where, limit, getDocs } from 'firebase/firestore';
+import { 
+  doc, getDoc, collection, addDoc, deleteDoc, setDoc, // Necesario para crear el like con ID específico
+  onSnapshot, query, orderBy, where, limit, getDocs, 
+  updateDoc, increment 
+} from 'firebase/firestore';
 import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from 'firebase/auth';
 import { Helmet } from 'react-helmet-async';
 import ShareButtons from '../components/ShareButtons';
-import { ArrowLeft, MessageSquare, Send, User, Trash2, Calendar, Sparkles } from 'lucide-react';
+// Importamos el Corazón de nuevo
+import { ArrowLeft, MessageSquare, Send, User, Trash2, Calendar, Sparkles, Heart } from 'lucide-react';
 
 export default function PostDetail() {
   const { id } = useParams();
@@ -15,11 +19,14 @@ export default function PostDetail() {
   const [relacionadas, setRelacionadas] = useState([]); 
   
   const [comentarios, setComentarios] = useState([]);
-  const [nuevoComentario, setNuevoComentario] = useState('');
+  const [nuevoComentario, setNuevoComentario] = useState({ autor: '', texto: '' });
   
+  // ESTADOS DE LIKES Y USUARIO
   const [currentUser, setCurrentUser] = useState(null);
+  const [likes, setLikes] = useState(0);
+  const [hasLiked, setHasLiked] = useState(false); // ¿Ya votó?
 
-  // Detectar usuario en tiempo real
+  // Detectar usuario
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
@@ -50,10 +57,10 @@ export default function PostDetail() {
         if (docSnap.exists()) {
             const data = { id: docSnap.id, ...docSnap.data() };
             setPost(data);
-            // Cargamos relacionadas
+            setLikes(data.likes || 0); // Cargar contador total de likes
             fetchRelacionadas(data.categoria, data.id);
         } else {
-            console.log("No existe el documento");
+            console.log("No existe");
             setPost(null);
         }
       } catch (error) { 
@@ -66,7 +73,27 @@ export default function PostDetail() {
     window.scrollTo(0, 0);
   }, [id]);
 
-  // 3. RELACIONADAS
+  // --- 3. VERIFICAR SI YO YA DI LIKE (El Cerebro) ---
+  useEffect(() => {
+    if (currentUser && id) {
+        const checkUserLike = async () => {
+            // Buscamos en la carpeta 'likes' el documento con MI nombre (uid)
+            const likeRef = doc(db, "posts", id, "likes", currentUser.uid);
+            const likeSnap = await getDoc(likeRef);
+            
+            if (likeSnap.exists()) {
+                setHasLiked(true); // Ya di like
+            } else {
+                setHasLiked(false); // No he dado like
+            }
+        };
+        checkUserLike();
+    } else {
+        setHasLiked(false);
+    }
+  }, [currentUser, id]);
+
+  // 4. RELACIONADAS
   const fetchRelacionadas = async (categoria, currentId) => {
     try {
         const postsRef = collection(db, "posts");
@@ -79,7 +106,7 @@ export default function PostDetail() {
     }
   };
 
-  // 4. COMENTARIOS
+  // 5. COMENTARIOS
   useEffect(() => {
     const commentsRef = collection(db, "posts", id, "comments");
     const q = query(commentsRef, orderBy("fecha", "desc"));
@@ -89,7 +116,47 @@ export default function PostDetail() {
     return () => unsubscribe();
   }, [id]);
 
-  // 5. PUBLICAR COMENTARIO
+  // --- 6. MANEJO INTELIGENTE DEL LIKE ---
+  const handleLike = async () => {
+    if (!currentUser) return handleLogin(); // Si no está logueado, pedimos login
+    
+    // Referencias a la base de datos
+    const postRef = doc(db, "posts", id);
+    const likeRef = doc(db, "posts", id, "likes", currentUser.uid); // EL DOCUMENTO SE LLAMA IGUAL QUE EL USUARIO
+
+    try {
+        if (hasLiked) {
+            // SI YA TIENE LIKE -> LO QUITAMOS (Dislike)
+            setLikes(prev => prev - 1); // Actualizamos visualmente rápido
+            setHasLiked(false);
+            
+            // Borramos el registro del usuario
+            await deleteDoc(likeRef);
+            // Restamos 1 al contador global
+            await updateDoc(postRef, { likes: increment(-1) });
+
+        } else {
+            // SI NO TIENE LIKE -> LO PONEMOS
+            setLikes(prev => prev + 1); // Actualizamos visualmente rápido
+            setHasLiked(true);
+
+            // Creamos el registro con el ID del usuario
+            await setDoc(likeRef, {
+                uid: currentUser.uid,
+                fecha: Date.now()
+            });
+            // Sumamos 1 al contador global
+            await updateDoc(postRef, { likes: increment(1) });
+        }
+    } catch (error) {
+        console.error("Error en like:", error);
+        // Si falla algo en la red, revertimos el cambio visual para no engañar al usuario
+        setLikes(prev => hasLiked ? prev + 1 : prev - 1);
+        setHasLiked(!hasLiked);
+    }
+  };
+
+  // 7. PUBLICAR COMENTARIO
   const handleSubmitComentario = async (e) => {
     e.preventDefault();
     if (!nuevoComentario.trim()) return;
@@ -122,8 +189,7 @@ export default function PostDetail() {
   if (!post) return <div className="container py-5 text-center"><h3>Noticia no encontrada</h3><Link to="/">Volver</Link></div>;
 
   const seoTitle = post ? post.titulo : "Noticia";
-  // Creamos la descripción pero nos faltaba usarla
-  const seoDesc = post ? post.contenido.substring(0, 150) : ""; 
+  const seoDesc = post ? post.contenido.substring(0, 150) : "";
   const seoImage = post?.imagen || "https://blog-azulmarcaribe.netlify.app/logo.png";
 
   return (
@@ -131,15 +197,10 @@ export default function PostDetail() {
       
       <Helmet>
         <title>{seoTitle} | Azul Mar Caribe</title>
-        {/* --- AQUÍ AGREGAMOS EL USO DE LA VARIABLE --- */}
         <meta name="description" content={seoDesc} />
-        
         <meta property="og:type" content="article" />
         <meta property="og:title" content={seoTitle} />
-        
-        {/* --- Y AQUÍ TAMBIÉN --- */}
         <meta property="og:description" content={seoDesc} />
-        
         <meta property="og:image" content={seoImage} />
         <meta property="og:url" content={window.location.href} />
       </Helmet>
@@ -154,7 +215,8 @@ export default function PostDetail() {
             <small className="text-muted d-flex align-items-center gap-1"><Calendar size={14} /> {formatearFecha(post.fecha)}</small>
         </div>
         
-        <h1 className="fw-bold mb-4 display-5 text-dark">{post.titulo}</h1>
+        <h1 className="fw-bold mb-4 display-5 text-dark" style={{letterSpacing: '-1px'}}>{post.titulo}</h1>
+        
         <div className="d-flex align-items-center gap-2 mb-4 text-muted">
             <div className="bg-light rounded-circle p-2"><User size={18} /></div>
             <span className="small fw-bold">Por: {post.autor || "Redacción"}</span>
@@ -164,11 +226,24 @@ export default function PostDetail() {
         
         <div style={{lineHeight: '1.9', fontSize: '1.15rem', color: '#333'}} dangerouslySetInnerHTML={{ __html: post.contenido }} />
 
-        <div className="mt-5 border-top pt-4">
-            <ShareButtons title={post.titulo} />
+        {/* --- ZONA DE LIKES Y COMPARTIR --- */}
+        <div className="mt-5 d-flex flex-column flex-md-row gap-3 align-items-center justify-content-between border-top pt-4">
+            <button 
+                onClick={handleLike}
+                // Cambia de color si ya diste like
+                className={`btn rounded-pill px-4 py-2 fw-bold d-flex align-items-center gap-2 transition-all ${hasLiked ? 'btn-danger' : 'btn-outline-danger'}`}
+            >
+                {/* Rellena el corazón si ya diste like */}
+                <Heart size={20} fill={hasLiked ? "currentColor" : "none"} />
+                {hasLiked ? '¡Te gusta!' : 'Me gusta'} 
+                <span className="badge bg-white text-danger ms-1 rounded-pill border border-danger">{likes}</span>
+            </button>
+            <div className="w-100 w-md-auto"><ShareButtons title={post.titulo} /></div>
         </div>
       </article>
 
+      {/* ... SECCIONES RELACIONADAS Y COMENTARIOS (Sin cambios) ... */}
+      
       {relacionadas.length > 0 && (
         <section className="mb-5">
             <h4 className="fw-bold mb-4 d-flex align-items-center gap-2 text-dark"><Sparkles className="text-warning" fill="orange" /> También te podría interesar</h4>
@@ -207,7 +282,7 @@ export default function PostDetail() {
             </form>
         ) : (
             <div className="text-center py-4 mb-5 bg-light rounded-3 border">
-                <p className="text-muted mb-3">Para dejar un comentario, necesitas iniciar sesión.</p>
+                <p className="text-muted mb-3">Para dejar un comentario o dar Like, necesitas iniciar sesión.</p>
                 <button onClick={handleLogin} className="btn btn-dark rounded-pill px-4 d-inline-flex align-items-center gap-2">
                     <img src="https://www.svgrepo.com/show/475656/google-color.svg" width="20" alt="G" /> Iniciar sesión con Google
                 </button>
