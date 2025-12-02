@@ -172,7 +172,7 @@ export default function BlogForm({ onPostCreated, postToEdit, onCancel, onNotify
                           </div>
                       ) : (
                           <label htmlFor="fileInput" className="btn btn-outline-primary cursor-pointer d-flex align-items-center justify-content-center gap-2" style={{cursor: 'pointer'}}>
-                              <UploadCloud size={20} /> Subir imagen desde tu PC
+                              <UploadCloud size={20} /> Subir imagen 
                           </label>
                       )}
                   </div>

@@ -10,50 +10,38 @@ import NewsTicker from '../components/NewsTicker';
 export default function HomePage() {
   const [noticias, setNoticias] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false); // Estado para el botón "Cargar más"
+  const [loadingMore, setLoadingMore] = useState(false);
   const [busqueda, setBusqueda] = useState('');
-  const [ultimoDoc, setUltimoDoc] = useState(null); // El cursor para saber dónde quedamos
-  const [hayMas, setHayMas] = useState(true); // Para saber si ocultar el botón
+  const [ultimoDoc, setUltimoDoc] = useState(null);
+  const [hayMas, setHayMas] = useState(true);
   
   const [searchParams, setSearchParams] = useSearchParams();
   const categoriaActual = searchParams.get('cat') || 'Todas';
 
-  // CANTIDAD DE NOTICIAS POR PÁGINA
   const NOTICIAS_POR_PAGINA = 6;
 
-  // 1. CARGA INICIAL (Se dispara al entrar o cambiar categoría)
+  // 1. CARGA INICIAL
   useEffect(() => {
     const cargarNoticiasIniciales = async () => {
       setLoading(true);
-      setNoticias([]); // Limpiamos para que no se mezclen
       try {
         const postsRef = collection(db, "posts");
-        
-        // Construimos la consulta (Query)
         let q;
         if (categoriaActual === 'Todas') {
-            q = query(
-                postsRef, 
-                orderBy("fecha", "desc"), 
-                limit(NOTICIAS_POR_PAGINA)
-            );
+            q = query(postsRef, orderBy("fecha", "desc"), limit(NOTICIAS_POR_PAGINA));
         } else {
-            // Si hay categoría, filtramos (Requiere índice en Firebase si falla)
-            q = query(
-                postsRef, 
-                where("categoria", "==", categoriaActual),
-                orderBy("fecha", "desc"), 
-                limit(NOTICIAS_POR_PAGINA)
-            );
+            q = query(postsRef, where("categoria", "==", categoriaActual), orderBy("fecha", "desc"), limit(NOTICIAS_POR_PAGINA));
         }
 
         const snapshot = await getDocs(q);
         
-        // Guardamos el último documento para saber desde dónde seguir después
-        const lastVisible = snapshot.docs[snapshot.docs.length - 1];
-        setUltimoDoc(lastVisible);
+        if (!snapshot.empty) {
+            const lastVisible = snapshot.docs[snapshot.docs.length - 1];
+            setUltimoDoc(lastVisible);
+        } else {
+            setUltimoDoc(null);
+        }
 
-        // Si trajimos menos de lo pedido, es que no hay más
         if (snapshot.docs.length < NOTICIAS_POR_PAGINA) {
             setHayMas(false);
         } else {
@@ -71,9 +59,9 @@ export default function HomePage() {
     };
 
     cargarNoticiasIniciales();
-  }, [categoriaActual]); // Se ejecuta cada vez que cambias de categoría
+  }, [categoriaActual]);
 
-  // 2. FUNCIÓN CARGAR MÁS (Paginación)
+  // 2. CARGAR MÁS
   const cargarMasNoticias = async () => {
     if (!ultimoDoc) return;
     setLoadingMore(true);
@@ -83,34 +71,21 @@ export default function HomePage() {
         let q;
 
         if (categoriaActual === 'Todas') {
-            q = query(
-                postsRef, 
-                orderBy("fecha", "desc"), 
-                startAfter(ultimoDoc), // <--- La magia: empieza DESPUÉS del último
-                limit(NOTICIAS_POR_PAGINA)
-            );
+            q = query(postsRef, orderBy("fecha", "desc"), startAfter(ultimoDoc), limit(NOTICIAS_POR_PAGINA));
         } else {
-            q = query(
-                postsRef, 
-                where("categoria", "==", categoriaActual),
-                orderBy("fecha", "desc"), 
-                startAfter(ultimoDoc),
-                limit(NOTICIAS_POR_PAGINA)
-            );
+            q = query(postsRef, where("categoria", "==", categoriaActual), orderBy("fecha", "desc"), startAfter(ultimoDoc), limit(NOTICIAS_POR_PAGINA));
         }
 
         const snapshot = await getDocs(q);
         
-        const lastVisible = snapshot.docs[snapshot.docs.length - 1];
-        setUltimoDoc(lastVisible);
+        if (!snapshot.empty) {
+            const lastVisible = snapshot.docs[snapshot.docs.length - 1];
+            setUltimoDoc(lastVisible);
 
-        // Mapear nuevos
-        const nuevasNoticias = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        
-        // Añadir al final de la lista existente
-        setNoticias(prev => [...prev, ...nuevasNoticias]);
+            const nuevasNoticias = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setNoticias(prev => [...prev, ...nuevasNoticias]);
+        }
 
-        // Verificar si se acabaron
         if (snapshot.docs.length < NOTICIAS_POR_PAGINA) {
             setHayMas(false);
         }
@@ -133,8 +108,7 @@ export default function HomePage() {
       return tmp.textContent || tmp.innerText || "";
   }
 
-  // Filtro local solo para el buscador de texto
-  const noticiasVisibles = noticias.filter((nota) => {
+  const noticiasFiltradas = noticias.filter((nota) => {
     return nota.titulo.toLowerCase().includes(busqueda.toLowerCase());
   });
 
@@ -147,9 +121,24 @@ export default function HomePage() {
       
       <NewsTicker />
 
-      {/* HEADER */}
-      <div className="bg-white py-5 mb-5 shadow-sm" style={{borderBottom: '5px solid #00b4d8'}}>
-        <div className="container text-center">
+      {/* HEADER CON FONDO (banner.jpg) */}
+      <div 
+        className="py-5 mb-5 shadow-sm position-relative" 
+        style={{
+            borderBottom: '5px solid #00b4d8',
+            // AQUÍ ESTÁ LA FOTO DE FONDO
+            backgroundImage: "url('/banner.jpg')", 
+            backgroundSize: 'cover',
+            backgroundPosition: 'center'
+        }}
+      >
+        {/* Capa blanca semitransparente para que se lean las letras */}
+        <div style={{
+            position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', 
+            backgroundColor: 'rgba(255, 255, 255, 0.85)' 
+        }}></div>
+
+        <div className="container text-center position-relative">
             <h1 className="display-4 fw-bold text-uppercase mb-2 d-flex align-items-center justify-content-center gap-3" style={{color: '#0077b6', letterSpacing:'2px'}}>
                 <Globe size={48} /> Actualidad Caribe
             </h1>
@@ -195,21 +184,19 @@ export default function HomePage() {
       <div className="container pb-5">
         
         {loading ? (
-            /* SKELETONS AL CARGAR */
             <div className="row g-4">
                 {[1, 2, 3, 4, 5, 6].map((n) => <PostSkeleton key={n} />)}
             </div>
         ) : (
             <>
-                {/* LISTA DE NOTICIAS */}
-                {noticiasVisibles.length === 0 && (
+                {noticiasFiltradas.length === 0 && (
                     <div className="text-center py-5">
                         <h3 className="text-muted d-flex align-items-center justify-content-center gap-2"><Search size={32} /> No encontramos noticias</h3>
                     </div>
                 )}
 
                 <div className="row g-4">
-                {noticiasVisibles.map(nota => (
+                {noticiasFiltradas.map(nota => (
                     <div key={nota.id} className="col-md-6 col-lg-4">
                     <div className="card news-card h-100 border-0 shadow-sm hover-effect">
                         <div style={{height: '220px', overflow: 'hidden', position: 'relative'}}>
@@ -246,7 +233,7 @@ export default function HomePage() {
                 </div>
 
                 {/* BOTÓN CARGAR MÁS */}
-                {hayMas && noticiasVisibles.length > 0 && (
+                {hayMas && noticiasFiltradas.length > 0 && (
                     <div className="text-center mt-5">
                         <button 
                             onClick={cargarMasNoticias} 
