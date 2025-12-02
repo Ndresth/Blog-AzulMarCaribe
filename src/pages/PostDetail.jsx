@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { db, auth } from '../firebase/config'; 
-import { doc, getDoc, collection, addDoc, deleteDoc, onSnapshot, query, orderBy, where, limit, getDocs, updateDoc, increment } from 'firebase/firestore';
+// Importaciones limpias
+import { doc, getDoc, collection, addDoc, deleteDoc, onSnapshot, query, orderBy, where, limit, getDocs } from 'firebase/firestore';
 import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from 'firebase/auth';
 import { Helmet } from 'react-helmet-async';
 import ShareButtons from '../components/ShareButtons';
-import { ArrowLeft, MessageSquare, Send, User, Trash2, Calendar, Sparkles, Heart, LogIn } from 'lucide-react';
+import { ArrowLeft, MessageSquare, Send, User, Trash2, Calendar, Sparkles } from 'lucide-react';
 
 export default function PostDetail() {
   const { id } = useParams();
@@ -16,9 +17,7 @@ export default function PostDetail() {
   const [comentarios, setComentarios] = useState([]);
   const [nuevoComentario, setNuevoComentario] = useState('');
   
-  // ESTADOS DE USUARIO
   const [currentUser, setCurrentUser] = useState(null);
-  const [likes, setLikes] = useState(0);
 
   // Detectar usuario en tiempo real
   useEffect(() => {
@@ -31,7 +30,7 @@ export default function PostDetail() {
   const adminsAutorizados = ["yamithadresjulio@gmail.com", "xiomysofy24@gmail.com"];
   const isAdmin = currentUser && adminsAutorizados.includes(currentUser.email); 
 
-  // 1. LOGIN CON GOOGLE (Para usuarios normales)
+  // 1. LOGIN CON GOOGLE
   const handleLogin = async () => {
     const provider = new GoogleAuthProvider();
     try {
@@ -51,12 +50,17 @@ export default function PostDetail() {
         if (docSnap.exists()) {
             const data = { id: docSnap.id, ...docSnap.data() };
             setPost(data);
-            setLikes(data.likes || 0); // Cargar likes
+            // Cargamos relacionadas
             fetchRelacionadas(data.categoria, data.id);
         } else {
-            console.log("No existe");
+            console.log("No existe el documento");
+            setPost(null);
         }
-      } catch (error) { console.error(error); } finally { setLoading(false); }
+      } catch (error) { 
+        console.error("Error cargando post:", error); 
+      } finally { 
+        setLoading(false); 
+      }
     };
     getPost();
     window.scrollTo(0, 0);
@@ -70,7 +74,9 @@ export default function PostDetail() {
         const snapshot = await getDocs(q);
         const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() })).filter(d => d.id !== currentId).slice(0, 3);
         setRelacionadas(docs);
-    } catch (error) { console.error(error); }
+    } catch (error) { 
+        console.error("Error cargando relacionadas:", error); 
+    }
   };
 
   // 4. COMENTARIOS
@@ -83,35 +89,28 @@ export default function PostDetail() {
     return () => unsubscribe();
   }, [id]);
 
-  // 5. DAR LIKE (Solo si está logueado)
-  const handleLike = async () => {
-    if (!currentUser) return handleLogin(); // Si no está logueado, pide login
-    
-    setLikes(prev => prev + 1); // Optimista
-    try {
-        const postRef = doc(db, "posts", id);
-        await updateDoc(postRef, { likes: increment(1) });
-    } catch { setLikes(prev => prev - 1); }
-  };
-
-  // 6. PUBLICAR COMENTARIO (Solo si está logueado)
+  // 5. PUBLICAR COMENTARIO
   const handleSubmitComentario = async (e) => {
     e.preventDefault();
     if (!nuevoComentario.trim()) return;
     
     try {
       await addDoc(collection(db, "posts", id, "comments"), {
-        autor: currentUser.displayName || "Usuario", // Usamos nombre de Google
-        email: currentUser.email, // Guardamos correo por seguridad (oculto)
+        autor: currentUser.displayName || "Usuario", 
+        email: currentUser.email, 
         texto: nuevoComentario,
         fecha: Date.now()
       });
       setNuevoComentario('');
-    } catch (error) { console.error(error); }
+    } catch (error) { console.error("Error al comentar:", error); }
   };
 
   const handleDeleteComment = async (commentId) => {
-    if(window.confirm("¿Borrar comentario?")) await deleteDoc(doc(db, "posts", id, "comments", commentId));
+    if(window.confirm("¿Borrar comentario?")) {
+        try {
+            await deleteDoc(doc(db, "posts", id, "comments", commentId));
+        } catch (error) { console.error("Error borrando:", error); }
+    }
   }
 
   const formatearFecha = (timestamp) => {
@@ -122,12 +121,27 @@ export default function PostDetail() {
   if (loading) return <div className="container py-5 text-center"><div className="spinner-border text-primary"></div></div>;
   if (!post) return <div className="container py-5 text-center"><h3>Noticia no encontrada</h3><Link to="/">Volver</Link></div>;
 
+  const seoTitle = post ? post.titulo : "Noticia";
+  // Creamos la descripción pero nos faltaba usarla
+  const seoDesc = post ? post.contenido.substring(0, 150) : ""; 
+  const seoImage = post?.imagen || "https://blog-azulmarcaribe.netlify.app/logo.png";
+
   return (
     <div className="container py-5" style={{maxWidth: '900px'}}>
+      
       <Helmet>
-        <title>{post.titulo} | Azul Mar Caribe</title>
-        <meta property="og:title" content={post.titulo} />
-        <meta property="og:image" content={post.imagen || "https://blog-azulmarcaribe.netlify.app/logo.png"} />
+        <title>{seoTitle} | Azul Mar Caribe</title>
+        {/* --- AQUÍ AGREGAMOS EL USO DE LA VARIABLE --- */}
+        <meta name="description" content={seoDesc} />
+        
+        <meta property="og:type" content="article" />
+        <meta property="og:title" content={seoTitle} />
+        
+        {/* --- Y AQUÍ TAMBIÉN --- */}
+        <meta property="og:description" content={seoDesc} />
+        
+        <meta property="og:image" content={seoImage} />
+        <meta property="og:url" content={window.location.href} />
       </Helmet>
 
       <Link to="/" className="btn btn-light mb-4 shadow-sm fw-bold text-primary px-4 rounded-pill d-inline-flex align-items-center gap-2">
@@ -150,16 +164,8 @@ export default function PostDetail() {
         
         <div style={{lineHeight: '1.9', fontSize: '1.15rem', color: '#333'}} dangerouslySetInnerHTML={{ __html: post.contenido }} />
 
-        {/* --- ZONA DE LIKES Y COMPARTIR --- */}
-        <div className="mt-5 d-flex flex-column flex-md-row gap-3 align-items-center justify-content-between border-top pt-4">
-            <button 
-                onClick={handleLike}
-                className="btn btn-outline-danger rounded-pill px-4 py-2 fw-bold d-flex align-items-center gap-2"
-            >
-                <Heart size={20} fill={likes > 0 ? "currentColor" : "none"} />
-                {likes} Me gusta
-            </button>
-            <div className="w-100 w-md-auto"><ShareButtons title={post.titulo} /></div>
+        <div className="mt-5 border-top pt-4">
+            <ShareButtons title={post.titulo} />
         </div>
       </article>
 
@@ -171,7 +177,7 @@ export default function PostDetail() {
                     <div key={rel.id} className="col-md-4">
                         <Link to={`/post/${rel.id}`} className="text-decoration-none text-dark">
                             <div className="card h-100 border-0 shadow-sm hover-effect">
-                                <img src={rel.imagen} alt={rel.titulo} className="card-img-top" style={{height:'120px', objectFit:'cover'}} />
+                                <img src={rel.imagen} alt={rel.titulo} className="card-img-top" style={{height:'120px', objectFit:'cover'}} onError={(e) => e.target.src = "https://via.placeholder.com/400"} />
                                 <div className="card-body p-3"><h6 className="card-title fw-bold mb-0" style={{fontSize: '0.9rem'}}>{rel.titulo}</h6></div>
                             </div>
                         </Link>
@@ -186,9 +192,7 @@ export default function PostDetail() {
             <MessageSquare size={24} /> Comentarios ({comentarios.length})
         </h3>
 
-        {/* --- FORMULARIO CONDICIONAL --- */}
         {currentUser ? (
-            // SI ESTÁ LOGUEADO: VE EL FORMULARIO
             <form onSubmit={handleSubmitComentario} className="mb-5 bg-light p-4 rounded-3 border">
                 <div className="d-flex align-items-center gap-2 mb-3">
                     <img src={currentUser.photoURL || "https://ui-avatars.com/api/?name="+currentUser.displayName} alt="Avatar" className="rounded-circle" width="30" />
@@ -202,9 +206,8 @@ export default function PostDetail() {
                 </div>
             </form>
         ) : (
-            // SI NO ESTÁ LOGUEADO: BOTÓN DE INICIO
             <div className="text-center py-4 mb-5 bg-light rounded-3 border">
-                <p className="text-muted mb-3">Para dejar un comentario o dar Like, necesitas iniciar sesión.</p>
+                <p className="text-muted mb-3">Para dejar un comentario, necesitas iniciar sesión.</p>
                 <button onClick={handleLogin} className="btn btn-dark rounded-pill px-4 d-inline-flex align-items-center gap-2">
                     <img src="https://www.svgrepo.com/show/475656/google-color.svg" width="20" alt="G" /> Iniciar sesión con Google
                 </button>
