@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { db, storage, auth } from '../firebase/config';
 import { collection, addDoc, updateDoc, doc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -10,10 +10,55 @@ import {
 } from 'react-simple-wysiwyg';
 import { Link as LinkIcon, Send, RefreshCw, UploadCloud, Video, CheckCircle } from 'lucide-react'; 
 
+// --- FUNCIÓN DE SANITIZACIÓN AGREGADA ---
+const sanitizeEditorHTML = (html) => {
+  if (!html) return "";
+  
+  // 1. Eliminar DOCTYPE, comentarios, estilos CSS
+  let clean = html
+    .replace(/<!DOCTYPE[^>]*>/gi, '')
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<meta[^>]*>/gi, '')
+    .replace(/<link[^>]*>/gi, '');
+  
+  // 2. Eliminar etiquetas peligrosas (body, html, head, etc.)
+  clean = clean.replace(/<\/?(body|html|head|title)[^>]*>/gi, '');
+  
+  // 3. Reemplazar etiquetas problemáticas pero preservar contenido
+  clean = clean.replace(/<\/?o:p[^>]*>/gi, ''); // Etiquetas Office
+  clean = clean.replace(/<\/?span[^>]*>/gi, ''); // Spans innecesarios
+  
+  // 4. Limpiar atributos problemáticos pero mantener clases básicas
+  clean = clean.replace(/\s(class|style|id|lang|dir|align)\s*=\s*["'][^"']*["']/gi, '');
+  
+  // 5. Normalizar etiquetas
+  clean = clean.replace(/<p[^>]*><\/p>/gi, ''); // Párrafos vacíos
+  clean = clean.replace(/<strong>/gi, '<b>').replace(/<\/strong>/gi, '</b>');
+  clean = clean.replace(/<em>/gi, '<i>').replace(/<\/em>/gi, '</i>');
+  
+  // 6. Asegurar que todas las etiquetas estén cerradas (para párrafos básicos)
+  const tags = ['p', 'b', 'i', 'u', 'ul', 'ol', 'li', 'h2', 'h3', 'h4'];
+  tags.forEach(tag => {
+    const regex = new RegExp(`<${tag}[^>]*>`, 'gi');
+    clean = clean.replace(regex, `<${tag}>`);
+  });
+  
+  // 7. Eliminar espacios múltiples y saltos de línea innecesarios
+  clean = clean.replace(/\n\s*\n/g, '\n').replace(/\s+/g, ' ').trim();
+  
+  return clean;
+};
+
 export default function BlogForm({ onPostCreated, postToEdit, onCancel, onNotify }) {
   const [formData, setFormData] = useState(() => {
     if (postToEdit) {
-      return { ...postToEdit };
+      // SANITIZAR EL CONTENIDO AL CARGAR PARA EDITAR
+      return { 
+        ...postToEdit,
+        contenido: sanitizeEditorHTML(postToEdit.contenido || '')
+      };
     } 
     return {
       id: Date.now(), 
@@ -27,6 +72,7 @@ export default function BlogForm({ onPostCreated, postToEdit, onCancel, onNotify
   
   const [file, setFile] = useState(null); 
   const [loading, setLoading] = useState(false);
+  const editorRef = useRef(null);
   
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [linkUrl, setLinkUrl] = useState('');
@@ -39,10 +85,16 @@ export default function BlogForm({ onPostCreated, postToEdit, onCancel, onNotify
         categoria: postToEdit.categoria,
         imagen: postToEdit.imagen,
         videoUrl: postToEdit.videoUrl || '',
-        contenido: postToEdit.contenido
+        contenido: sanitizeEditorHTML(postToEdit.contenido || '') // SANITIZAR AL CARGAR
       });
     } else {
-        setFormData({ titulo: '', categoria: 'Cultural', imagen: '', videoUrl: '', contenido: '' });
+        setFormData({ 
+          titulo: '', 
+          categoria: 'Cultural', 
+          imagen: '', 
+          videoUrl: '', 
+          contenido: '' 
+        });
         setFile(null);
     }
   }, [postToEdit]);
@@ -52,7 +104,18 @@ export default function BlogForm({ onPostCreated, postToEdit, onCancel, onNotify
   };
 
   const handleEditorChange = (e) => {
-    setFormData({ ...formData, contenido: e.target.value });
+    const contenido = e.target.value;
+    
+    // SANITIZAR EN TIEMPO REAL LO MÁS IMPORTANTE
+    let sanitized = contenido;
+    
+    // Eliminar etiquetas body/html/head inmediatamente
+    sanitized = sanitized.replace(/<\/?(body|html|head)[^>]*>/gi, '');
+    
+    // Eliminar scripts
+    sanitized = sanitized.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+    
+    setFormData({ ...formData, contenido: sanitized });
   };
 
   const handleFileChange = (e) => {
@@ -69,7 +132,9 @@ export default function BlogForm({ onPostCreated, postToEdit, onCancel, onNotify
     }
   };
 
-  const applyBlockStyle = (tag) => document.execCommand('formatBlock', false, tag);
+  const applyBlockStyle = (tag) => {
+    document.execCommand('formatBlock', false, tag);
+  };
 
   const openLinkModal = () => {
     const selection = window.getSelection();
@@ -117,33 +182,40 @@ export default function BlogForm({ onPostCreated, postToEdit, onCancel, onNotify
       const user = auth.currentUser;
       const autor = user.displayName || user.email;
 
-      // CLONAMOS EL OBJETO PARA NO MUTAR EL ESTADO
+      // SANITIZACIÓN FINAL ANTES DE GUARDAR
+      const contenidoFinal = sanitizeEditorHTML(formData.contenido || '');
+      
+      console.log("Contenido sanitizado antes de guardar (primeros 200 chars):", 
+        contenidoFinal.substring(0, 200));
+      
+      // 3. Guardar en Firestore
       const datosFinales = {
-        ...formData,
+        titulo: formData.titulo.trim(),
+        categoria: formData.categoria,
         imagen: imageUrl, 
-        videoUrl: videoLink,
-        autor: autor
+        videoUrl: videoLink || '',
+        contenido: contenidoFinal,
+        autor: autor,
+        fecha: postToEdit ? undefined : Date.now() // Solo para nuevos posts
       };
 
-      // --- CORRECCIÓN AQUÍ: Borramos el ID explícitamente ---
-      delete datosFinales.id; 
-      // -----------------------------------------------------
-
-      // 3. Guardar en Firestore
       if (postToEdit) {
         const docRef = doc(db, "posts", postToEdit.id);
         await updateDoc(docRef, datosFinales);
         onNotify("✅ Noticia actualizada correctamente");
       } else {
-        await addDoc(collection(db, "posts"), {
-          ...datosFinales,
-          fecha: Date.now()
-        });
+        await addDoc(collection(db, "posts"), datosFinales);
         onNotify("✅ Noticia publicada con éxito");
       }
 
       // 4. Limpiar
-      setFormData({ titulo: '', categoria: 'Cultural', imagen: '', videoUrl: '', contenido: '' });
+      setFormData({ 
+        titulo: '', 
+        categoria: 'Cultural', 
+        imagen: '', 
+        videoUrl: '', 
+        contenido: '' 
+      });
       setFile(null);
       
       if(onPostCreated) onPostCreated();
@@ -163,7 +235,15 @@ export default function BlogForm({ onPostCreated, postToEdit, onCancel, onNotify
           <div className="row g-3">
               <div className="col-md-8">
                   <label className="form-label fw-bold small text-muted">TÍTULO</label>
-                  <input type="text" name="titulo" className="form-control" required value={formData.titulo} onChange={handleChange} />
+                  <input 
+                    type="text" 
+                    name="titulo" 
+                    className="form-control" 
+                    required 
+                    value={formData.titulo} 
+                    onChange={handleChange}
+                    maxLength={200}
+                  />
               </div>
 
               <div className="col-md-4">
@@ -192,7 +272,10 @@ export default function BlogForm({ onPostCreated, postToEdit, onCancel, onNotify
                               <button 
                                 type="button"
                                 className="btn btn-sm btn-danger position-absolute top-0 end-0 m-1 rounded-circle"
-                                onClick={() => { setFile(null); setFormData({...formData, imagen: ''}) }}
+                                onClick={() => { 
+                                  setFile(null); 
+                                  setFormData({...formData, imagen: ''});
+                                }}
                               >
                                 <RefreshCw size={14}/>
                               </button>
@@ -236,10 +319,16 @@ export default function BlogForm({ onPostCreated, postToEdit, onCancel, onNotify
               </div>
 
               <div className="col-12">
-                  <label className="form-label fw-bold small text-muted">CONTENIDO</label>
+                  <label className="form-label fw-bold small text-muted d-flex justify-content-between align-items-center">
+                    <span>CONTENIDO</span>
+                    <small className="text-warning fw-normal">
+                      Se eliminarán automáticamente etiquetas HTML peligrosas
+                    </small>
+                  </label>
                   <div style={{border: '1px solid #ced4da', borderRadius: '0.375rem', overflow: 'hidden'}}>
                       <EditorProvider>
                         <Editor 
+                          ref={editorRef}
                           value={formData.contenido} 
                           onChange={handleEditorChange}
                           style={{minHeight: '350px', backgroundColor: 'white'}}
@@ -283,7 +372,14 @@ export default function BlogForm({ onPostCreated, postToEdit, onCancel, onNotify
                     <div className="modal-content">
                         <div className="modal-header"><h5 className="modal-title">Insertar Enlace</h5></div>
                         <div className="modal-body">
-                            <input type="text" className="form-control" value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} autoFocus placeholder="https://..." />
+                            <input 
+                              type="text" 
+                              className="form-control" 
+                              value={linkUrl} 
+                              onChange={(e) => setLinkUrl(e.target.value)} 
+                              autoFocus 
+                              placeholder="https://..." 
+                            />
                         </div>
                         <div className="modal-footer">
                             <button type="button" className="btn btn-secondary" onClick={() => setShowLinkModal(false)}>Cancelar</button>

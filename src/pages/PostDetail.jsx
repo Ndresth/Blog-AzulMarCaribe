@@ -48,7 +48,8 @@ export default function PostDetail() {
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
             const data = { id: docSnap.id, ...docSnap.data() };
-            console.log("Contenido del post (primeros 500 chars):", data.contenido?.substring(0, 500)); // Para diagnóstico
+            // SANITIZAR EL CONTENIDO AL CARGAR
+            data.contenido = sanitizeContentOnLoad(data.contenido || '');
             setPost(data);
             setLikes(data.likes || 0); 
             fetchRelacionadas(data.categoria, data.id);
@@ -144,50 +145,58 @@ export default function PostDetail() {
     return new Date(timestamp).toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' });
   }
 
-  // --- FUNCIÓN EXTREMA: CONVERTIR HTML A TEXTO PLANO ---
-  const htmlToPlainText = (html) => {
+  // --- SANITIZACIÓN AL CARGAR EL CONTENIDO ---
+  const sanitizeContentOnLoad = (html) => {
     if (!html) return "";
     
-    // Crear un div temporal
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = html;
+    // AGRESIVA: Eliminar TODO excepto etiquetas básicas seguras
+    const allowedTags = ['p', 'br', 'b', 'i', 'u', 'strong', 'em', 'ul', 'ol', 'li', 'h2', 'h3', 'h4'];
     
-    // Obtener solo el texto
-    let text = tempDiv.textContent || tempDiv.innerText || "";
+    // 1. Eliminar todas las etiquetas excepto las permitidas
+    let sanitized = html.replace(/<\/?([^>\s]+)[^>]*>/g, (match, tag) => {
+      const lowerTag = tag.toLowerCase();
+      if (allowedTags.includes(lowerTag)) {
+        // Solo mantener la etiqueta básica sin atributos
+        return match.startsWith('</') ? `</${lowerTag}>` : `<${lowerTag}>`;
+      }
+      return ''; // Eliminar etiqueta no permitida
+    });
     
-    // Limpiar espacios extras
-    text = text.replace(/\s+/g, ' ').trim();
+    // 2. Eliminar scripts, estilos, comentarios (por si acaso)
+    sanitized = sanitized
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+      .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
+      .replace(/<!--[\s\S]*?-->/g, '');
     
-    return text;
+    // 3. Eliminar cualquier rastro de body, html, head
+    sanitized = sanitized.replace(/<\/?(body|html|head)[^>]*>/gi, '');
+    
+    return sanitized.trim();
   };
 
-  // --- FUNCIÓN PARA LIMPIEZA DE SEO ---
-  const cleanForSeo = (html) => {
-    if (!html) return "";
+  // --- FUNCIÓN DE LIMPIEZA PARA SEO ---
+  const cleanForSeo = (text) => {
+    if (!text) return "";
     
-    // Usar la misma función de texto plano para SEO
-    return htmlToPlainText(html).substring(0, 150);
-  }
-
-  // --- FUNCIÓN PARA DETECTAR SI EL CONTENIDO TIENE HTML PROBLEMÁTICO ---
-  const hasProblematicHTML = (html) => {
-    if (!html) return false;
-    return html.includes('<body') || html.includes('<html') || html.includes('<head');
+    // Convertir HTML a texto
+    let tmp = document.createElement("DIV");
+    tmp.innerHTML = text;
+    let cleanText = tmp.textContent || tmp.innerText || "";
+    
+    return cleanText
+      .replace(/"/g, "'")
+      .replace(/\s+/g, " ")
+      .trim()
+      .substring(0, 150);
   }
 
   if (loading) return <div className="container py-5 text-center"><div className="spinner-border text-primary"></div></div>;
   if (!post) return <div className="container py-5 text-center"><h3>Noticia no encontrada</h3><Link to="/">Volver</Link></div>;
 
-  // APLICAMOS LA LIMPIEZA AQUÍ
+  // APLICAMOS LA LIMPIEZA PARA SEO
   const seoTitle = cleanForSeo(post.titulo);
   const seoDesc = cleanForSeo(post.contenido);
   const seoImage = post?.imagen || "https://blog-azulmarcaribe.netlify.app/logo.png";
-
-  // DETERMINAR CÓMO MOSTRAR EL CONTENIDO
-  const showContentAsPlainText = post.videoUrl || hasProblematicHTML(post.contenido);
-  const contentToDisplay = showContentAsPlainText 
-    ? htmlToPlainText(post.contenido)
-    : post.contenido;
 
   return (
     <div className="container py-5" style={{maxWidth: '900px'}}>
@@ -195,7 +204,6 @@ export default function PostDetail() {
       <Helmet>
         <title>{seoTitle} | Azul Mar Caribe</title>
         <meta name="description" content={seoDesc} />
-        
         <meta property="og:type" content="article" />
         <meta property="og:title" content={seoTitle} />
         <meta property="og:description" content={seoDesc} />
@@ -221,26 +229,21 @@ export default function PostDetail() {
         
         {post.imagen && <img src={post.imagen} className="img-fluid rounded-4 shadow-sm mb-4 w-100" style={{maxHeight:'500px', objectFit:'cover'}} alt={post.titulo} onError={(e) => e.target.src = "https://via.placeholder.com/800"} />}
         
-        {/* CONTENIDO: TEXTO PLANO CUANDO HAY VIDEO O HTML PROBLEMÁTICO */}
-        {showContentAsPlainText ? (
-          <div style={{lineHeight: '1.9', fontSize: '1.15rem', color: '#333', whiteSpace: 'pre-wrap'}}>
-            {contentToDisplay}
-          </div>
-        ) : (
-          <div 
-            style={{lineHeight: '1.9', fontSize: '1.15rem', color: '#333'}} 
-            dangerouslySetInnerHTML={{ __html: contentToDisplay }} 
-          />
-        )}
+        {/* CONTENIDO YA SANITIZADO */}
+        <div 
+          style={{lineHeight: '1.9', fontSize: '1.15rem', color: '#333'}} 
+          dangerouslySetInnerHTML={{ __html: post.contenido || '' }}
+          suppressHydrationWarning
+        />
 
-        {/* VIDEO - CON LLAVE ÚNICA PARA FORZAR RE-MOUNT */}
+        {/* VIDEO - CON LLAVE ÚNICA */}
         {post.videoUrl && (
-            <div className="mt-5 pt-4 border-top">
+            <div className="mt-5 pt-4 border-top" key={`video-section-${id}`}>
                 <h5 className="fw-bold text-dark mb-3 d-flex align-items-center gap-2">
                     <Video size={20} /> Video Relacionado
                 </h5>
-                <div className="ratio ratio-16x9 rounded-4 overflow-hidden shadow" style={{background:'#000'}} key={`video-container-${id}`}>
-                    {post.videoUrl && (post.videoUrl.includes("youtube.com") || post.videoUrl.includes("youtu.be")) ? (
+                <div className="ratio ratio-16x9 rounded-4 overflow-hidden shadow" style={{background:'#000'}}>
+                    {post.videoUrl.includes("youtube.com") || post.videoUrl.includes("youtu.be") ? (
                         <iframe 
                             src={post.videoUrl.includes("watch?v=") 
                                 ? post.videoUrl.replace("watch?v=", "embed/") 
@@ -248,11 +251,12 @@ export default function PostDetail() {
                             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
                             allowFullScreen
                             title={`Video: ${post.titulo}`}
-                            key={`video-iframe-${id}`}
                             className="w-100 h-100"
+                            key={`video-${id}`}
+                            loading="lazy"
                         />
                     ) : (
-                        <video controls className="w-100 h-100" key={`video-tag-${id}`}>
+                        <video controls className="w-100 h-100" key={`video-local-${id}`}>
                             <source src={post.videoUrl} />
                             Tu navegador no soporta la reproducción de video.
                         </video>
@@ -278,7 +282,9 @@ export default function PostDetail() {
       {/* RELACIONADAS */}
       {relacionadas.length > 0 && (
         <section className="mb-5">
-            <h4 className="fw-bold mb-4 d-flex align-items-center gap-2 text-dark"><Sparkles className="text-warning" fill="orange" /> También te podría interesar</h4>
+            <h4 className="fw-bold mb-4 d-flex align-items-center gap-2 text-dark">
+              <Sparkles className="text-warning" fill="orange" /> También te podría interesar
+            </h4>
             <div className="row g-3">
                 {relacionadas.map(rel => (
                     <div key={rel.id} className="col-md-4">
