@@ -2,14 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { db, auth } from '../firebase/config'; 
 import { 
-  doc, getDoc, collection, addDoc, deleteDoc, setDoc, 
+  doc, getDoc, collection, addDoc, deleteDoc, setDoc, // <--- AHORA SÍ ESTÁ AQUÍ
   onSnapshot, query, orderBy, where, limit, getDocs, 
   updateDoc, increment 
 } from 'firebase/firestore';
 import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from 'firebase/auth';
 import { Helmet } from 'react-helmet-async';
 import ShareButtons from '../components/ShareButtons';
-import { ArrowLeft, MessageSquare, Send, User, Trash2, Calendar, Sparkles, Video, Heart, LogIn } from 'lucide-react';
+import { ArrowLeft, MessageSquare, Send, User, Trash2, Calendar, Sparkles, Heart, LogIn, Video } from 'lucide-react';
 
 export default function PostDetail() {
   const { id } = useParams();
@@ -35,12 +35,13 @@ export default function PostDetail() {
   const adminsAutorizados = ["yamithadresjulio@gmail.com", "xiomysofy24@gmail.com"];
   const isAdmin = currentUser && adminsAutorizados.includes(currentUser.email); 
 
+  // 1. LOGIN CON GOOGLE
   const handleLogin = async () => {
     const provider = new GoogleAuthProvider();
     try { await signInWithPopup(auth, provider); } catch (error) { console.error("Error login:", error); }
   };
 
-  // CARGAR NOTICIA
+  // 2. CARGAR NOTICIA
   useEffect(() => {
     const getPost = async () => {
       setLoading(true);
@@ -59,13 +60,17 @@ export default function PostDetail() {
     window.scrollTo(0, 0);
   }, [id]);
 
-  // VERIFICAR LIKE
+  // --- 3. VERIFICAR SI YO YA DI LIKE ---
   useEffect(() => {
     if (currentUser && id) {
         const checkUserLike = async () => {
             const likeRef = doc(db, "posts", id, "likes", currentUser.uid);
             const likeSnap = await getDoc(likeRef);
-            if (likeSnap.exists()) { setHasLiked(true); } else { setHasLiked(false); }
+            if (likeSnap.exists()) {
+                setHasLiked(true);
+            } else {
+                setHasLiked(false);
+            }
         };
         checkUserLike();
     } else {
@@ -73,7 +78,7 @@ export default function PostDetail() {
     }
   }, [currentUser, id]);
 
-  // RELACIONADAS
+  // 4. RELACIONADAS
   const fetchRelacionadas = async (categoria, currentId) => {
     try {
         const postsRef = collection(db, "posts");
@@ -84,7 +89,7 @@ export default function PostDetail() {
     } catch (error) { console.error("Error cargando relacionadas:", error); }
   };
 
-  // COMENTARIOS
+  // 5. COMENTARIOS
   useEffect(() => {
     const commentsRef = collection(db, "posts", id, "comments");
     const q = query(commentsRef, orderBy("fecha", "desc"));
@@ -94,21 +99,25 @@ export default function PostDetail() {
     return () => unsubscribe();
   }, [id]);
 
-  // LIKE
+  // 6. MANEJO DE LIKES
   const handleLike = async () => {
     if (!currentUser) return handleLogin(); 
+    
     const postRef = doc(db, "posts", id);
     const likeRef = doc(db, "posts", id, "likes", currentUser.uid);
+
     try {
         if (hasLiked) {
+            // Quitar Like
             setLikes(prev => prev - 1); 
             setHasLiked(false);
             await deleteDoc(likeRef);
             await updateDoc(postRef, { likes: increment(-1) });
         } else {
+            // Dar Like
             setLikes(prev => prev + 1);
             setHasLiked(true);
-            await setDoc(likeRef, { uid: currentUser.uid });
+            await setDoc(likeRef, { uid: currentUser.uid }); // <--- AQUÍ SE USA setDoc
             await updateDoc(postRef, { likes: increment(1) });
         }
     } catch (error) {
@@ -118,10 +127,11 @@ export default function PostDetail() {
     }
   };
 
-  // PUBLICAR COMENTARIO
+  // 7. PUBLICAR COMENTARIO
   const handleSubmitComentario = async (e) => {
     e.preventDefault();
     if (!nuevoComentario.trim()) return;
+    
     try {
       await addDoc(collection(db, "posts", id, "comments"), {
         autor: currentUser.displayName || "Usuario", 
@@ -130,12 +140,14 @@ export default function PostDetail() {
         fecha: Date.now()
       });
       setNuevoComentario('');
-    } catch (error) { console.error("Error:", error); }
+    } catch (error) { console.error("Error al comentar:", error); }
   };
 
   const handleDeleteComment = async (commentId) => {
     if(window.confirm("¿Borrar comentario?")) {
-        try { await deleteDoc(doc(db, "posts", id, "comments", commentId)); } catch (error) { console.error(error); }
+        try {
+            await deleteDoc(doc(db, "posts", id, "comments", commentId));
+        } catch (error) { console.error(error); }
     }
   }
 
@@ -144,19 +156,11 @@ export default function PostDetail() {
     return new Date(timestamp).toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' });
   }
 
-  // --- FUNCIÓN DE LIMPIEZA (NUEVO) ---
-  const stripHtml = (html) => {
-    let tmp = document.createElement("DIV");
-    tmp.innerHTML = html;
-    return tmp.textContent || tmp.innerText || "";
-  }
-
   if (loading) return <div className="container py-5 text-center"><div className="spinner-border text-primary"></div></div>;
   if (!post) return <div className="container py-5 text-center"><h3>Noticia no encontrada</h3><Link to="/">Volver</Link></div>;
 
   const seoTitle = post ? post.titulo : "Noticia";
-  // AHORA USAMOS stripHtml() PARA QUE NO SE ROMPA EL META TAG
-  const seoDesc = post ? stripHtml(post.contenido).substring(0, 150) : "";
+  const seoDesc = post ? post.contenido.substring(0, 150) : "";
   const seoImage = post?.imagen || "https://blog-azulmarcaribe.netlify.app/logo.png";
 
   return (
@@ -215,7 +219,7 @@ export default function PostDetail() {
             </div>
         )}
 
-        {/* LIKES Y COMPARTIR */}
+        {/* BOTONES DE COMPARTIR */}
         <div className="mt-5 d-flex flex-column flex-md-row gap-3 align-items-center justify-content-between border-top pt-4">
             <button 
                 onClick={handleLike}
@@ -229,7 +233,7 @@ export default function PostDetail() {
         </div>
       </article>
 
-      {/* Relacionadas */}
+      {/* ... Relacionadas y Comentarios ... */}
       {relacionadas.length > 0 && (
         <section className="mb-5">
             <h4 className="fw-bold mb-4 d-flex align-items-center gap-2 text-dark"><Sparkles className="text-warning" fill="orange" /> También te podría interesar</h4>
@@ -248,7 +252,6 @@ export default function PostDetail() {
         </section>
       )}
 
-      {/* Comentarios */}
       <section className="bg-white p-4 rounded-4 shadow-sm border-0">
         <h3 className="mb-4 fw-bold text-primary d-flex align-items-center gap-2 border-bottom pb-3">
             <MessageSquare size={24} /> Comentarios ({comentarios.length})
