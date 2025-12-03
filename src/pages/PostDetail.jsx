@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { db, auth } from '../firebase/config'; 
 import { 
@@ -23,8 +23,11 @@ export default function PostDetail() {
   const [currentUser, setCurrentUser] = useState(null);
   const [likes, setLikes] = useState(0);
   const [hasLiked, setHasLiked] = useState(false);
+  const [isClient, setIsClient] = useState(false);
+  const videoContainerRef = useRef(null);
 
   useEffect(() => {
+    setIsClient(true);
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
     });
@@ -143,6 +146,16 @@ export default function PostDetail() {
     return new Date(timestamp).toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' });
   }
 
+  // --- FUNCIÓN DE SANITIZACIÓN PARA HTML ---
+  const sanitizeHTML = (html) => {
+    if (!html) return "";
+    
+    // Remover etiquetas body, html, head si existen
+    return html
+      .replace(/<\/?(body|html|head)[^>]*>/gi, '')
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+  };
+
   // --- FUNCIÓN DE LIMPIEZA BLINDADA PARA SEO ---
   const cleanForSeo = (html) => {
     if (!html) return "";
@@ -205,27 +218,45 @@ export default function PostDetail() {
         
         {post.imagen && <img src={post.imagen} className="img-fluid rounded-4 shadow-sm mb-4 w-100" style={{maxHeight:'500px', objectFit:'cover'}} alt={post.titulo} onError={(e) => e.target.src = "https://via.placeholder.com/800"} />}
         
-        <div style={{lineHeight: '1.9', fontSize: '1.15rem', color: '#333'}} dangerouslySetInnerHTML={{ __html: post.contenido }} />
+        {/* CONTENIDO CON SANITIZACIÓN */}
+        <div style={{lineHeight: '1.9', fontSize: '1.15rem', color: '#333'}} 
+             dangerouslySetInnerHTML={{ __html: sanitizeHTML(post.contenido) || '' }} />
 
-        {/* VIDEO */}
+        {/* VIDEO - SOLUCIÓN COMPLETA */}
         {post.videoUrl && (
-            <div className="mt-5 pt-4 border-top">
-                <h5 className="fw-bold text-dark mb-3 d-flex align-items-center gap-2"><Video size={20} /> Video Relacionado</h5>
-                <div className="ratio ratio-16x9 rounded-4 overflow-hidden shadow" style={{background:'#000'}}>
-                    {(post.videoUrl.includes("youtube.com") || post.videoUrl.includes("youtu.be")) ? (
-                        <iframe 
-                            src={post.videoUrl.includes("watch?v=") 
-                                ? post.videoUrl.replace("watch?v=", "embed/") 
-                                : post.videoUrl.replace("youtu.be/", "youtube.com/embed/")} 
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-                            allowFullScreen
-                            title={`Video: ${post.titulo}`}
-                        ></iframe>
+            <div className="mt-5 pt-4 border-top" ref={videoContainerRef}>
+                <h5 className="fw-bold text-dark mb-3 d-flex align-items-center gap-2">
+                    <Video size={20} /> Video Relacionado
+                </h5>
+                <div className="position-relative" style={{ paddingBottom: '56.25%', background: '#000', borderRadius: '16px', overflow: 'hidden' }}>
+                    {isClient && post.videoUrl ? (
+                        (post.videoUrl.includes("youtube.com") || post.videoUrl.includes("youtu.be")) ? (
+                            <iframe 
+                                key={`video-${id}`}
+                                src={post.videoUrl.includes("watch?v=") 
+                                    ? post.videoUrl.replace("watch?v=", "embed/") 
+                                    : post.videoUrl.replace("youtu.be/", "youtube.com/embed/")} 
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                                allowFullScreen
+                                title={`Video: ${post.titulo}`}
+                                className="position-absolute w-100 h-100"
+                                style={{ top: 0, left: 0, border: 0 }}
+                                loading="lazy"
+                            />
+                        ) : (
+                            <video 
+                                controls 
+                                className="position-absolute w-100 h-100"
+                                style={{ top: 0, left: 0, objectFit: 'contain' }}
+                            >
+                                <source src={post.videoUrl} />
+                                Tu navegador no soporta la reproducción de video.
+                            </video>
+                        )
                     ) : (
-                        <video controls className="w-100" style={{height: '100%'}}>
-                            <source src={post.videoUrl} />
-                            Tu navegador no soporta la reproducción de video.
-                        </video>
+                        <div className="position-absolute w-100 h-100 d-flex align-items-center justify-content-center text-white">
+                            Cargando video...
+                        </div>
                     )}
                 </div>
             </div>
