@@ -143,30 +143,33 @@ export default function PostDetail() {
     return new Date(timestamp).toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' });
   }
 
-  // --- FUNCIÓN DE LIMPIEZA AGRESIVA PARA SEO ---
+  // --- FUNCIÓN DE LIMPIEZA BLINDADA PARA SEO ---
   const cleanForSeo = (html) => {
     if (!html) return "";
-    // 1. Quitar etiquetas HTML
+    
+    // 1. Crear elemento temporal para quitar HTML
     let tmp = document.createElement("DIV");
     tmp.innerHTML = html;
     let text = tmp.textContent || tmp.innerText || "";
     
-    // 2. REGLA DE ORO: Quitar comillas dobles y saltos de línea
-    // Esto evita que el texto se "salga" de la etiqueta meta
+    // 2. REEMPLAZO AGRESIVO DE CARACTERES PROBLEMÁTICOS
     return text
-      .replace(/"/g, "'")   // Cambia comillas dobles por simples
-      .replace(/\n/g, " ")  // Cambia Enters por espacios
-      .replace(/\s+/g, " ") // Elimina espacios dobles
-      .substring(0, 150);   // Corta a 150 caracteres
+      .replace(/"/g, "'")      // Comillas dobles a simples (CRÍTICO)
+      .replace(/\n/g, " ")     // Saltos de línea a espacio
+      .replace(/\r/g, " ")     // Retornos de carro a espacio
+      .replace(/\\/g, "")      // Quitar backslashes
+      .replace(/\s+/g, " ")    // Múltiples espacios a uno solo
+      .trim()
+      .substring(0, 150);      // Cortar a 150 caracteres
   }
   // --------------------------------------------
 
   if (loading) return <div className="container py-5 text-center"><div className="spinner-border text-primary"></div></div>;
   if (!post) return <div className="container py-5 text-center"><h3>Noticia no encontrada</h3><Link to="/">Volver</Link></div>;
 
-  // Aplicamos la limpieza
-  const seoTitle = post ? post.titulo.replace(/"/g, "'") : "Noticia";
-  const seoDesc = post ? cleanForSeo(post.contenido) : "";
+  // APLICAMOS LA LIMPIEZA AQUÍ
+  const seoTitle = cleanForSeo(post.titulo);
+  const seoDesc = cleanForSeo(post.contenido);
   const seoImage = post?.imagen || "https://blog-azulmarcaribe.netlify.app/logo.png";
 
   return (
@@ -174,9 +177,9 @@ export default function PostDetail() {
       
       <Helmet>
         <title>{seoTitle} | Azul Mar Caribe</title>
-        
-        {/* USAMOS LAS VARIABLES LIMPIAS */}
+        {/* Usamos las variables limpias */}
         <meta name="description" content={seoDesc} />
+        
         <meta property="og:type" content="article" />
         <meta property="og:title" content={seoTitle} />
         <meta property="og:description" content={seoDesc} />
@@ -242,7 +245,7 @@ export default function PostDetail() {
         </div>
       </article>
 
-      {/* RELACIONADAS Y COMENTARIOS (El resto sigue igual...) */}
+      {/* RELACIONADAS */}
       {relacionadas.length > 0 && (
         <section className="mb-5">
             <h4 className="fw-bold mb-4 d-flex align-items-center gap-2 text-dark"><Sparkles className="text-warning" fill="orange" /> También te podría interesar</h4>
@@ -261,6 +264,7 @@ export default function PostDetail() {
         </section>
       )}
 
+      {/* COMENTARIOS */}
       <section className="bg-white p-4 rounded-4 shadow-sm border-0">
         <h3 className="mb-4 fw-bold text-primary d-flex align-items-center gap-2 border-bottom pb-3">
             <MessageSquare size={24} /> Comentarios ({comentarios.length})
