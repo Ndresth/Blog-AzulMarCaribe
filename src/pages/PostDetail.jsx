@@ -24,6 +24,10 @@ export default function PostDetail() {
   const [likes, setLikes] = useState(0);
   const [hasLiked, setHasLiked] = useState(false);
 
+  // prevent Helmet from rendering on server / before client mount (avoids SSR injection issues)
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
@@ -143,21 +147,24 @@ export default function PostDetail() {
     return new Date(timestamp).toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' });
   }
 
-  // --- FUNCIÓN DE LIMPIEZA AGRESIVA PARA SEO ---
+  // --- FUNCIÓN DE LIMPIEZA AGRESIVA PARA SEO / evitar inyección de fragmentos en el HTML ---
   const cleanForSeo = (html) => {
     if (!html) return "";
-    // 1. Quitar etiquetas HTML
+    // Quitar etiquetas HTML y obtener texto plano
     let tmp = document.createElement("DIV");
     tmp.innerHTML = html;
     let text = tmp.textContent || tmp.innerText || "";
-    
-    // 2. REGLA DE ORO: Quitar comillas dobles y saltos de línea
-    // Esto evita que el texto se "salga" de la etiqueta meta
+    // Sanitizar caracteres problemáticos que pueden romper SSR/HTML
     return text
-      .replace(/"/g, "'")   // Cambia comillas dobles por simples
-      .replace(/\n/g, " ")  // Cambia Enters por espacios
-      .replace(/\s+/g, " ") // Elimina espacios dobles
-      .substring(0, 150);   // Corta a 150 caracteres
+      .replace(/"/g, "'")     // comillas dobles -> simples
+      .replace(/</g, '')      // quitar <
+      .replace(/>/g, '')      // quitar >
+      .replace(/\/>/g, '')    // quitar cierre de tag suelto
+      .replace(/&/g, ' y ')   // evitar entidades que rompan atributos
+      .replace(/\n/g, " ")    // saltos de linea -> espacio
+      .replace(/\s+/g, " ")   // espacios multiples -> 1
+      .trim()
+      .substring(0, 150);     // cortar para meta description
   }
   // --------------------------------------------
 
@@ -165,24 +172,25 @@ export default function PostDetail() {
   if (!post) return <div className="container py-5 text-center"><h3>Noticia no encontrada</h3><Link to="/">Volver</Link></div>;
 
   // Aplicamos limpieza al título y descripción
-  const seoTitle = post ? post.titulo.replace(/"/g, "'") : "Noticia";
+  const seoTitle = post ? (post.titulo || 'Noticia').replace(/["<>]/g, "'").replace(/\/>/g, '') : "Noticia";
   const seoDesc = post ? cleanForSeo(post.contenido) : "";
   const seoImage = post?.imagen || "https://blog-azulmarcaribe.netlify.app/logo.png";
 
   return (
     <div className="container py-5" style={{maxWidth: '900px'}}>
       
-      <Helmet>
-        <title>{seoTitle} | Azul Mar Caribe</title>
-        
-        {/* Usamos las variables limpias para que no rompan el HTML */}
-        <meta name="description" content={seoDesc} />
-        <meta property="og:type" content="article" />
-        <meta property="og:title" content={seoTitle} />
-        <meta property="og:description" content={seoDesc} />
-        <meta property="og:image" content={seoImage} />
-        <meta property="og:url" content={window.location.href} />
-      </Helmet>
+      {/* Renderizar Helmet solo en cliente (mounted) para evitar inyección de texto durante SSR/prerender */}
+      {mounted && (
+        <Helmet>
+          <title>{seoTitle} | Azul Mar Caribe</title>
+          <meta name="description" content={seoDesc} />
+          <meta property="og:type" content="article" />
+          <meta property="og:title" content={seoTitle} />
+          <meta property="og:description" content={seoDesc} />
+          <meta property="og:image" content={seoImage} />
+          <meta property="og:url" content={typeof window !== 'undefined' ? window.location.href : ''} />
+        </Helmet>
+      )}
 
       <Link to="/" className="btn btn-light mb-4 shadow-sm fw-bold text-primary px-4 rounded-pill d-inline-flex align-items-center gap-2">
         <ArrowLeft size={18} /> Volver al Inicio
@@ -242,7 +250,6 @@ export default function PostDetail() {
         </div>
       </article>
 
-      {/* ... (Resto de componentes igual: Relacionadas y Comentarios) ... */}
       {relacionadas.length > 0 && (
         <section className="mb-5">
             <h4 className="fw-bold mb-4 d-flex align-items-center gap-2 text-dark"><Sparkles className="text-warning" fill="orange" /> También te podría interesar</h4>
