@@ -9,7 +9,7 @@ import {
 import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from 'firebase/auth';
 import { Helmet } from 'react-helmet-async';
 import ShareButtons from '../components/ShareButtons';
-import { ArrowLeft, MessageSquare, Send, User, Trash2, Calendar, Sparkles, Heart, LogIn } from 'lucide-react';
+import { ArrowLeft, MessageSquare, Send, User, Trash2, Calendar, Sparkles, Heart, LogIn, Video } from 'lucide-react';
 
 export default function PostDetail() {
   const { id } = useParams();
@@ -18,14 +18,13 @@ export default function PostDetail() {
   const [relacionadas, setRelacionadas] = useState([]); 
   
   const [comentarios, setComentarios] = useState([]);
-  
-  // CORRECCIÓN 1: El comentario ahora es solo TEXTO simple, no un objeto.
   const [nuevoComentario, setNuevoComentario] = useState('');
   
   const [currentUser, setCurrentUser] = useState(null);
   const [likes, setLikes] = useState(0);
   const [hasLiked, setHasLiked] = useState(false);
 
+  // Detectar usuario en tiempo real
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
@@ -36,15 +35,9 @@ export default function PostDetail() {
   const adminsAutorizados = ["yamithadresjulio@gmail.com", "xiomysofy24@gmail.com"];
   const isAdmin = currentUser && adminsAutorizados.includes(currentUser.email); 
 
-  // CORRECCIÓN 2: Login silencioso (sin alertas feas)
   const handleLogin = async () => {
     const provider = new GoogleAuthProvider();
-    try {
-      await signInWithPopup(auth, provider);
-      // No necesitamos hacer nada más, el useEffect detectará el usuario y actualizará la vista
-    } catch (error) {
-      console.error("Login cancelado o fallido", error);
-    }
+    try { await signInWithPopup(auth, provider); } catch (error) { console.error("Error login:", error); }
   };
 
   // CARGAR NOTICIA
@@ -57,13 +50,10 @@ export default function PostDetail() {
         if (docSnap.exists()) {
             const data = { id: docSnap.id, ...docSnap.data() };
             setPost(data);
-            setLikes(data.likes || 0); 
+            setLikes(data.likes || 0);
             fetchRelacionadas(data.categoria, data.id);
-        } else {
-            console.log("No existe");
-            setPost(null);
-        }
-      } catch (error) { console.error(error); } finally { setLoading(false); }
+        } else { setPost(null); }
+      } catch (error) { console.error("Error cargando post:", error); } finally { setLoading(false); }
     };
     getPost();
     window.scrollTo(0, 0);
@@ -95,7 +85,7 @@ export default function PostDetail() {
         const snapshot = await getDocs(q);
         const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() })).filter(d => d.id !== currentId).slice(0, 3);
         setRelacionadas(docs);
-    } catch (error) { console.error(error); }
+    } catch (error) { console.error("Error cargando relacionadas:", error); }
   };
 
   // COMENTARIOS
@@ -137,14 +127,13 @@ export default function PostDetail() {
   // PUBLICAR COMENTARIO
   const handleSubmitComentario = async (e) => {
     e.preventDefault();
-    if (!nuevoComentario.trim()) return; // Verificamos que no esté vacío
+    if (!nuevoComentario.trim()) return;
     
     try {
-      // CORRECCIÓN 3: Guardamos el texto directamente
       await addDoc(collection(db, "posts", id, "comments"), {
         autor: currentUser.displayName || "Usuario", 
         email: currentUser.email, 
-        texto: nuevoComentario, // Aquí va el string limpio
+        texto: nuevoComentario, 
         fecha: Date.now()
       });
       setNuevoComentario('');
@@ -180,6 +169,7 @@ export default function PostDetail() {
         <meta property="og:title" content={seoTitle} />
         <meta property="og:description" content={seoDesc} />
         <meta property="og:image" content={seoImage} />
+        <meta property="og:url" content={window.location.href} />
       </Helmet>
 
       <Link to="/" className="btn btn-light mb-4 shadow-sm fw-bold text-primary px-4 rounded-pill d-inline-flex align-items-center gap-2">
@@ -202,6 +192,35 @@ export default function PostDetail() {
         
         <div style={{lineHeight: '1.9', fontSize: '1.15rem', color: '#333'}} dangerouslySetInnerHTML={{ __html: post.contenido }} />
 
+        {/* --- SECCIÓN DE VIDEO (Dual: YouTube o Archivo) --- */}
+        {post.videoUrl && (
+            <div className="mt-5 pt-4 border-top">
+                <h5 className="fw-bold text-dark mb-3 d-flex align-items-center gap-2"><Video size={20} /> Video Relacionado</h5>
+                <div className="rounded-4 overflow-hidden shadow" style={{background:'#000'}}>
+                    {/* LÓGICA: Si parece YouTube usamos iframe, si no, usamos video nativo */}
+                    {(post.videoUrl.includes("youtube.com") || post.videoUrl.includes("youtu.be")) ? (
+                        <div className="ratio ratio-16x9">
+                            <iframe 
+                                src={post.videoUrl.includes("watch?v=") 
+                                    ? post.videoUrl.replace("watch?v=", "embed/") 
+                                    : post.videoUrl.replace("youtu.be/", "youtube.com/embed/")} 
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                                allowFullScreen
+                                title={`Video: ${post.titulo}`}
+                            ></iframe>
+                        </div>
+                    ) : (
+                        /* VIDEO SUBIDO (Firebase Storage) */
+                        <video controls className="w-100" style={{maxHeight: '500px', display: 'block'}}>
+                            <source src={post.videoUrl} />
+                            Tu navegador no soporta la reproducción de video.
+                        </video>
+                    )}
+                </div>
+            </div>
+        )}
+        {/* ------------------------------------------------ */}
+
         <div className="mt-5 d-flex flex-column flex-md-row gap-3 align-items-center justify-content-between border-top pt-4">
             <button 
                 onClick={handleLike}
@@ -215,7 +234,7 @@ export default function PostDetail() {
         </div>
       </article>
 
-      {/* Relacionadas aquí... (igual que antes) */}
+      {/* Relacionadas */}
       {relacionadas.length > 0 && (
         <section className="mb-5">
             <h4 className="fw-bold mb-4 d-flex align-items-center gap-2 text-dark"><Sparkles className="text-warning" fill="orange" /> También te podría interesar</h4>
@@ -246,7 +265,6 @@ export default function PostDetail() {
                     <span className="fw-bold text-dark">Comentando como: {currentUser.displayName}</span>
                 </div>
                 <div className="mb-3">
-                    {/* Input simple para texto */}
                     <textarea 
                         className="form-control border-0 shadow-sm" 
                         rows="3" 
@@ -285,7 +303,6 @@ export default function PostDetail() {
                     </div>
                 </div>
             ))}
-            {comentarios.length === 0 && <p className="text-center text-muted py-3">Sé el primero en opinar.</p>}
         </div>
       </section>
     </div>
