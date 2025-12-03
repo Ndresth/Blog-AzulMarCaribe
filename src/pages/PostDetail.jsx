@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { db, auth } from '../firebase/config'; 
 import { 
-  doc, getDoc, collection, addDoc, deleteDoc, setDoc, // <--- AHORA SÍ ESTÁ AQUÍ
+  doc, getDoc, collection, addDoc, deleteDoc, setDoc, 
   onSnapshot, query, orderBy, where, limit, getDocs, 
   updateDoc, increment 
 } from 'firebase/firestore';
@@ -24,7 +24,6 @@ export default function PostDetail() {
   const [likes, setLikes] = useState(0);
   const [hasLiked, setHasLiked] = useState(false);
 
-  // Detectar usuario
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
@@ -35,13 +34,12 @@ export default function PostDetail() {
   const adminsAutorizados = ["yamithadresjulio@gmail.com", "xiomysofy24@gmail.com"];
   const isAdmin = currentUser && adminsAutorizados.includes(currentUser.email); 
 
-  // 1. LOGIN CON GOOGLE
   const handleLogin = async () => {
     const provider = new GoogleAuthProvider();
     try { await signInWithPopup(auth, provider); } catch (error) { console.error("Error login:", error); }
   };
 
-  // 2. CARGAR NOTICIA
+  // CARGAR NOTICIA
   useEffect(() => {
     const getPost = async () => {
       setLoading(true);
@@ -60,17 +58,13 @@ export default function PostDetail() {
     window.scrollTo(0, 0);
   }, [id]);
 
-  // --- 3. VERIFICAR SI YO YA DI LIKE ---
+  // VERIFICAR LIKE
   useEffect(() => {
     if (currentUser && id) {
         const checkUserLike = async () => {
             const likeRef = doc(db, "posts", id, "likes", currentUser.uid);
             const likeSnap = await getDoc(likeRef);
-            if (likeSnap.exists()) {
-                setHasLiked(true);
-            } else {
-                setHasLiked(false);
-            }
+            if (likeSnap.exists()) { setHasLiked(true); } else { setHasLiked(false); }
         };
         checkUserLike();
     } else {
@@ -78,7 +72,7 @@ export default function PostDetail() {
     }
   }, [currentUser, id]);
 
-  // 4. RELACIONADAS
+  // RELACIONADAS
   const fetchRelacionadas = async (categoria, currentId) => {
     try {
         const postsRef = collection(db, "posts");
@@ -89,7 +83,7 @@ export default function PostDetail() {
     } catch (error) { console.error("Error cargando relacionadas:", error); }
   };
 
-  // 5. COMENTARIOS
+  // COMENTARIOS
   useEffect(() => {
     const commentsRef = collection(db, "posts", id, "comments");
     const q = query(commentsRef, orderBy("fecha", "desc"));
@@ -99,25 +93,21 @@ export default function PostDetail() {
     return () => unsubscribe();
   }, [id]);
 
-  // 6. MANEJO DE LIKES
+  // LIKE
   const handleLike = async () => {
     if (!currentUser) return handleLogin(); 
-    
     const postRef = doc(db, "posts", id);
     const likeRef = doc(db, "posts", id, "likes", currentUser.uid);
-
     try {
         if (hasLiked) {
-            // Quitar Like
             setLikes(prev => prev - 1); 
             setHasLiked(false);
             await deleteDoc(likeRef);
             await updateDoc(postRef, { likes: increment(-1) });
         } else {
-            // Dar Like
             setLikes(prev => prev + 1);
             setHasLiked(true);
-            await setDoc(likeRef, { uid: currentUser.uid }); // <--- AQUÍ SE USA setDoc
+            await setDoc(likeRef, { uid: currentUser.uid });
             await updateDoc(postRef, { likes: increment(1) });
         }
     } catch (error) {
@@ -127,11 +117,10 @@ export default function PostDetail() {
     }
   };
 
-  // 7. PUBLICAR COMENTARIO
+  // COMENTAR
   const handleSubmitComentario = async (e) => {
     e.preventDefault();
     if (!nuevoComentario.trim()) return;
-    
     try {
       await addDoc(collection(db, "posts", id, "comments"), {
         autor: currentUser.displayName || "Usuario", 
@@ -140,14 +129,12 @@ export default function PostDetail() {
         fecha: Date.now()
       });
       setNuevoComentario('');
-    } catch (error) { console.error("Error al comentar:", error); }
+    } catch (error) { console.error("Error:", error); }
   };
 
   const handleDeleteComment = async (commentId) => {
     if(window.confirm("¿Borrar comentario?")) {
-        try {
-            await deleteDoc(doc(db, "posts", id, "comments", commentId));
-        } catch (error) { console.error(error); }
+        try { await deleteDoc(doc(db, "posts", id, "comments", commentId)); } catch (error) { console.error(error); }
     }
   }
 
@@ -156,11 +143,23 @@ export default function PostDetail() {
     return new Date(timestamp).toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' });
   }
 
+  // --- FUNCIÓN DE LIMPIEZA TOTAL PARA SEO ---
+  const cleanForSeo = (html) => {
+    if (!html) return "";
+    // 1. Quitar etiquetas HTML
+    let tmp = document.createElement("DIV");
+    tmp.innerHTML = html;
+    let text = tmp.textContent || tmp.innerText || "";
+    // 2. Quitar comillas y saltos de línea que rompen el meta tag
+    return text.replace(/"/g, "'").replace(/\n/g, " ").substring(0, 150);
+  }
+
   if (loading) return <div className="container py-5 text-center"><div className="spinner-border text-primary"></div></div>;
   if (!post) return <div className="container py-5 text-center"><h3>Noticia no encontrada</h3><Link to="/">Volver</Link></div>;
 
-  const seoTitle = post ? post.titulo : "Noticia";
-  const seoDesc = post ? post.contenido.substring(0, 150) : "";
+  // APLICAMOS LA LIMPIEZA
+  const seoTitle = post ? post.titulo.replace(/"/g, "'") : "Noticia";
+  const seoDesc = post ? cleanForSeo(post.contenido) : "";
   const seoImage = post?.imagen || "https://blog-azulmarcaribe.netlify.app/logo.png";
 
   return (
@@ -169,6 +168,8 @@ export default function PostDetail() {
       <Helmet>
         <title>{seoTitle} | Azul Mar Caribe</title>
         <meta name="description" content={seoDesc} />
+        
+        <meta property="og:type" content="article" />
         <meta property="og:title" content={seoTitle} />
         <meta property="og:description" content={seoDesc} />
         <meta property="og:image" content={seoImage} />
@@ -195,7 +196,7 @@ export default function PostDetail() {
         
         <div style={{lineHeight: '1.9', fontSize: '1.15rem', color: '#333'}} dangerouslySetInnerHTML={{ __html: post.contenido }} />
 
-        {/* --- SECCIÓN DE VIDEO --- */}
+        {/* VIDEO */}
         {post.videoUrl && (
             <div className="mt-5 pt-4 border-top">
                 <h5 className="fw-bold text-dark mb-3 d-flex align-items-center gap-2"><Video size={20} /> Video Relacionado</h5>
@@ -219,7 +220,7 @@ export default function PostDetail() {
             </div>
         )}
 
-        {/* BOTONES DE COMPARTIR */}
+        {/* LIKES Y COMPARTIR */}
         <div className="mt-5 d-flex flex-column flex-md-row gap-3 align-items-center justify-content-between border-top pt-4">
             <button 
                 onClick={handleLike}
@@ -233,7 +234,8 @@ export default function PostDetail() {
         </div>
       </article>
 
-      {/* ... Relacionadas y Comentarios ... */}
+      {/* RELACIONADAS Y COMENTARIOS (El resto sigue igual...) */}
+      
       {relacionadas.length > 0 && (
         <section className="mb-5">
             <h4 className="fw-bold mb-4 d-flex align-items-center gap-2 text-dark"><Sparkles className="text-warning" fill="orange" /> También te podría interesar</h4>
