@@ -28,9 +28,6 @@ export default function BlogForm({ onPostCreated, postToEdit, onCancel, onNotify
   const [file, setFile] = useState(null); 
   const [loading, setLoading] = useState(false);
   
-  // Eliminamos uploadProgress que no se usa
-
-  // Estados para el editor de texto
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [linkUrl, setLinkUrl] = useState('');
   const [savedRange, setSavedRange] = useState(null);
@@ -67,7 +64,7 @@ export default function BlogForm({ onPostCreated, postToEdit, onCancel, onNotify
 
   const handleVideoFileChange = (e) => {
     if (e.target.files[0]) {
-        setFile(e.target.files[0]); // Usamos el estado 'file' para la subida
+        setFile(e.target.files[0]); 
         setFormData({ ...formData, videoUrl: '' }); 
     }
   };
@@ -102,35 +99,37 @@ export default function BlogForm({ onPostCreated, postToEdit, onCancel, onNotify
       let imageUrl = formData.imagen;
       let videoLink = formData.videoUrl;
 
-      // 1. Subida de la IMAGEN (si hay archivo nuevo)
+      // 1. Subida de archivos (Imagen o Video)
       if (file) {
-        const imageRef = ref(storage, `blog_images/${Date.now()}_${file.name}`);
-        await uploadBytes(imageRef, file);
-        imageUrl = await getDownloadURL(imageRef);
-      }
+        const folder = file.type.startsWith('video/') ? 'blog_videos' : 'blog_images';
+        const storageRef = ref(storage, `${folder}/${Date.now()}_${file.name}`);
+        await uploadBytes(storageRef, file);
+        const downloadUrl = await getDownloadURL(storageRef);
 
-      // 2. Subida del VIDEO (si hay archivo nuevo) - REUTILIZA MISMA LÓGICA
-      // Nota: Si el usuario usa el input file de video, el estado 'file' tiene el archivo de video.
-      // Si el archivo es un video, lo subimos a 'blog_videos'
-      if (file && file.type.startsWith('video/')) {
-        const videoRef = ref(storage, `blog_videos/${Date.now()}_${file.name}`);
-        await uploadBytes(videoRef, file);
-        videoLink = await getDownloadURL(videoRef); 
+        if (file.type.startsWith('video/')) {
+            videoLink = downloadUrl;
+        } else {
+            imageUrl = downloadUrl;
+        }
       }
       
-      // 3. Obtener Autor
+      // 2. Preparar datos
       const user = auth.currentUser;
       const autor = user.displayName || user.email;
 
+      // CLONAMOS EL OBJETO PARA NO MUTAR EL ESTADO
       const datosFinales = {
         ...formData,
         imagen: imageUrl, 
         videoUrl: videoLink,
-        autor: autor,
-        id: undefined 
+        autor: autor
       };
 
-      // 4. Guardar/Actualizar en Firestore
+      // --- CORRECCIÓN AQUÍ: Borramos el ID explícitamente ---
+      delete datosFinales.id; 
+      // -----------------------------------------------------
+
+      // 3. Guardar en Firestore
       if (postToEdit) {
         const docRef = doc(db, "posts", postToEdit.id);
         await updateDoc(docRef, datosFinales);
@@ -143,7 +142,7 @@ export default function BlogForm({ onPostCreated, postToEdit, onCancel, onNotify
         onNotify("✅ Noticia publicada con éxito");
       }
 
-      // 5. Limpiar UI
+      // 4. Limpiar
       setFormData({ titulo: '', categoria: 'Cultural', imagen: '', videoUrl: '', contenido: '' });
       setFile(null);
       
@@ -151,7 +150,7 @@ export default function BlogForm({ onPostCreated, postToEdit, onCancel, onNotify
 
     } catch (error) {
       console.error("Error:", error);
-      onNotify("❌ Error al guardar la noticia. " + error.message);
+      onNotify("❌ Error al guardar: " + error.message);
     } finally {
       setLoading(false);
     }
@@ -175,7 +174,6 @@ export default function BlogForm({ onPostCreated, postToEdit, onCancel, onNotify
                   </select>
               </div>
 
-              {/* INPUT DE ARCHIVO (IMAGEN) */}
               <div className="col-12">
                   <label className="form-label fw-bold small text-muted">IMAGEN DE PORTADA</label>
                   <div className="border rounded p-3 text-center bg-light" style={{borderStyle: 'dashed'}}>
@@ -201,31 +199,27 @@ export default function BlogForm({ onPostCreated, postToEdit, onCancel, onNotify
                           </div>
                       ) : (
                           <label htmlFor="imageFileInput" className="btn btn-outline-primary cursor-pointer d-flex align-items-center justify-content-center gap-2" style={{cursor: 'pointer'}}>
-                              <UploadCloud size={20} /> {file?.type.startsWith('video/') ? '¡Video seleccionado, no imagen!' : 'Subir Imagen desde PC'}
+                              <UploadCloud size={20} /> {file?.type.startsWith('video/') ? 'Video seleccionado en otro campo' : 'Subir Imagen desde PC'}
                           </label>
                       )}
-                      {file && !file.type.startsWith('image/') && <p className="text-danger small mt-2">Archivo no es imagen. Se guardará como video o fallará.</p>}
                   </div>
               </div>
 
-              {/* INPUT DE VIDEO (Dual: Link o Archivo) */}
               <div className="col-12">
                   <label className="form-label fw-bold small text-muted d-flex align-items-center gap-2">
                     <Video size={18} /> VIDEO OPCIONAL
                   </label>
                   <div className="input-group">
-                    {/* INPUT DE LINK */}
                     <input 
                         type="url" 
                         name="videoUrl" 
                         className="form-control" 
-                        placeholder="Pegar URL de YouTube Embed (o URL directa)..." 
+                        placeholder="Pegar URL de YouTube..." 
                         value={formData.videoUrl} 
                         onChange={handleChange} 
-                        disabled={loading}
+                        disabled={loading || (file && file.type.startsWith('video/'))}
                     />
                     
-                    {/* BOTÓN SUBIR ARCHIVO */}
                     <label htmlFor="videoFileInput" className={`btn ${file?.type.startsWith('video/') ? 'btn-success' : 'btn-outline-dark'} d-flex align-items-center gap-2`}>
                         {file?.type.startsWith('video/') ? <CheckCircle size={20} /> : <UploadCloud size={20} />} 
                         {file?.type.startsWith('video/') ? 'Video Seleccionado' : 'Subir Video'}
@@ -236,15 +230,11 @@ export default function BlogForm({ onPostCreated, postToEdit, onCancel, onNotify
                         className="d-none" 
                         accept="video/*" 
                         onChange={handleVideoFileChange} 
-                        disabled={loading}
+                        disabled={loading || formData.videoUrl}
                     />
-                  </div>
-                  <div className="form-text text-muted">
-                    {file?.type.startsWith('video/') ? `Archivo listo: ${file.name}` : 'Sube un archivo de video o pega un link de inserción (embed).'}
                   </div>
               </div>
 
-              {/* Contenido (Editor) */}
               <div className="col-12">
                   <label className="form-label fw-bold small text-muted">CONTENIDO</label>
                   <div style={{border: '1px solid #ced4da', borderRadius: '0.375rem', overflow: 'hidden'}}>
@@ -271,7 +261,6 @@ export default function BlogForm({ onPostCreated, postToEdit, onCancel, onNotify
                   </div>
               </div>
 
-              {/* Botones */}
               <div className="col-12 d-flex justify-content-end gap-2 mt-3">
                   {postToEdit && (
                       <button type="button" className="btn btn-secondary px-4 rounded-pill" onClick={onCancel}>
@@ -286,7 +275,6 @@ export default function BlogForm({ onPostCreated, postToEdit, onCancel, onNotify
         </form>
       </div>
 
-      {/* MODAL LINK */}
       {showLinkModal && (
         <>
             <div className="modal-backdrop fade show" style={{zIndex: 1060}}></div>
