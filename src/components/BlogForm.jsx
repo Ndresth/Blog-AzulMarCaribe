@@ -61,7 +61,6 @@ export default function BlogForm({ onPostCreated, postToEdit, onCancel, onNotify
       };
     } 
     return {
-      id: Date.now(), 
       titulo: '',
       categoria: 'Cultural',
       imagen: '',
@@ -85,7 +84,7 @@ export default function BlogForm({ onPostCreated, postToEdit, onCancel, onNotify
         categoria: postToEdit.categoria,
         imagen: postToEdit.imagen,
         videoUrl: postToEdit.videoUrl || '',
-        contenido: sanitizeEditorHTML(postToEdit.contenido || '') // SANITIZAR AL CARGAR
+        contenido: sanitizeEditorHTML(postToEdit.contenido || '')
       });
     } else {
         setFormData({ 
@@ -188,27 +187,32 @@ export default function BlogForm({ onPostCreated, postToEdit, onCancel, onNotify
       console.log("Contenido sanitizado antes de guardar (primeros 200 chars):", 
         contenidoFinal.substring(0, 200));
       
-      // 3. Guardar en Firestore
+      // 3. Preparar datos para Firestore
       const datosFinales = {
         titulo: formData.titulo.trim(),
         categoria: formData.categoria,
         imagen: imageUrl, 
         videoUrl: videoLink || '',
         contenido: contenidoFinal,
-        autor: autor,
-        fecha: postToEdit ? undefined : Date.now() // Solo para nuevos posts
+        autor: autor
       };
 
+      // 4. Guardar en Firestore
       if (postToEdit) {
+        // Para edición: NO incluir fecha
         const docRef = doc(db, "posts", postToEdit.id);
         await updateDoc(docRef, datosFinales);
         onNotify("✅ Noticia actualizada correctamente");
       } else {
-        await addDoc(collection(db, "posts"), datosFinales);
+        // Para nuevo post: incluir fecha
+        await addDoc(collection(db, "posts"), {
+          ...datosFinales,
+          fecha: Date.now()
+        });
         onNotify("✅ Noticia publicada con éxito");
       }
 
-      // 4. Limpiar
+      // 5. Limpiar
       setFormData({ 
         titulo: '', 
         categoria: 'Cultural', 
