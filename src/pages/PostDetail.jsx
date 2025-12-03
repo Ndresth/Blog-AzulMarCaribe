@@ -23,10 +23,8 @@ export default function PostDetail() {
   const [currentUser, setCurrentUser] = useState(null);
   const [likes, setLikes] = useState(0);
   const [hasLiked, setHasLiked] = useState(false);
-  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
     });
@@ -50,6 +48,7 @@ export default function PostDetail() {
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
             const data = { id: docSnap.id, ...docSnap.data() };
+            console.log("Contenido del post (primeros 500 chars):", data.contenido?.substring(0, 500)); // Para diagnóstico
             setPost(data);
             setLikes(data.likes || 0); 
             fetchRelacionadas(data.categoria, data.id);
@@ -145,43 +144,35 @@ export default function PostDetail() {
     return new Date(timestamp).toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' });
   }
 
-  // --- FUNCIÓN SUPER AGRESIVA PARA SANITIZAR HTML ---
-  const sanitizeHTML = (html) => {
+  // --- FUNCIÓN EXTREMA: CONVERTIR HTML A TEXTO PLANO ---
+  const htmlToPlainText = (html) => {
     if (!html) return "";
     
-    // Primero, remover cualquier etiqueta <body>, <html>, <head>
-    let cleaned = html.replace(/<\/?(body|html|head)[^>]*>/gi, '');
+    // Crear un div temporal
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = html;
     
-    // Remover scripts completamente
-    cleaned = cleaned.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+    // Obtener solo el texto
+    let text = tempDiv.textContent || tempDiv.innerText || "";
     
-    // Remover estilos inline problemáticos
-    cleaned = cleaned.replace(/style\s*=\s*["'][^"']*["']/gi, '');
+    // Limpiar espacios extras
+    text = text.replace(/\s+/g, ' ').trim();
     
-    // Remover atributos problemáticos
-    cleaned = cleaned.replace(/\son\w+\s*=\s*["'][^"']*["']/gi, '');
-    
-    return cleaned;
+    return text;
   };
 
   // --- FUNCIÓN PARA LIMPIEZA DE SEO ---
   const cleanForSeo = (html) => {
     if (!html) return "";
     
-    // 1. Crear elemento temporal para quitar HTML
-    let tmp = document.createElement("DIV");
-    tmp.innerHTML = html;
-    let text = tmp.textContent || tmp.innerText || "";
-    
-    // 2. REEMPLAZO AGRESIVO DE CARACTERES PROBLEMÁTICOS
-    return text
-      .replace(/"/g, "'")      // Comillas dobles a simples (CRÍTICO)
-      .replace(/\n/g, " ")     // Saltos de línea a espacio
-      .replace(/\r/g, " ")     // Retornos de carro a espacio
-      .replace(/\\/g, "")      // Quitar backslashes
-      .replace(/\s+/g, " ")    // Múltiples espacios a uno solo
-      .trim()
-      .substring(0, 150);      // Cortar a 150 caracteres
+    // Usar la misma función de texto plano para SEO
+    return htmlToPlainText(html).substring(0, 150);
+  }
+
+  // --- FUNCIÓN PARA DETECTAR SI EL CONTENIDO TIENE HTML PROBLEMÁTICO ---
+  const hasProblematicHTML = (html) => {
+    if (!html) return false;
+    return html.includes('<body') || html.includes('<html') || html.includes('<head');
   }
 
   if (loading) return <div className="container py-5 text-center"><div className="spinner-border text-primary"></div></div>;
@@ -191,6 +182,12 @@ export default function PostDetail() {
   const seoTitle = cleanForSeo(post.titulo);
   const seoDesc = cleanForSeo(post.contenido);
   const seoImage = post?.imagen || "https://blog-azulmarcaribe.netlify.app/logo.png";
+
+  // DETERMINAR CÓMO MOSTRAR EL CONTENIDO
+  const showContentAsPlainText = post.videoUrl || hasProblematicHTML(post.contenido);
+  const contentToDisplay = showContentAsPlainText 
+    ? htmlToPlainText(post.contenido)
+    : post.contenido;
 
   return (
     <div className="container py-5" style={{maxWidth: '900px'}}>
@@ -210,7 +207,7 @@ export default function PostDetail() {
         <ArrowLeft size={18} /> Volver al Inicio
       </Link>
 
-      <article className="mb-5 bg-white p-4 p-md-5 rounded-4 shadow-sm border-0" key={id}>
+      <article className="mb-5 bg-white p-4 p-md-5 rounded-4 shadow-sm border-0">
         <div className="d-flex justify-content-between align-items-center mb-3">
             <span className="badge bg-info text-dark fs-6 px-3 py-2 rounded-pill">{post.categoria}</span>
             <small className="text-muted d-flex align-items-center gap-1"><Calendar size={14} /> {formatearFecha(post.fecha)}</small>
@@ -224,52 +221,42 @@ export default function PostDetail() {
         
         {post.imagen && <img src={post.imagen} className="img-fluid rounded-4 shadow-sm mb-4 w-100" style={{maxHeight:'500px', objectFit:'cover'}} alt={post.titulo} onError={(e) => e.target.src = "https://via.placeholder.com/800"} />}
         
-        {/* CONTENIDO CON SANITIZACIÓN EXTREMA */}
-        {mounted && (
+        {/* CONTENIDO: TEXTO PLANO CUANDO HAY VIDEO O HTML PROBLEMÁTICO */}
+        {showContentAsPlainText ? (
+          <div style={{lineHeight: '1.9', fontSize: '1.15rem', color: '#333', whiteSpace: 'pre-wrap'}}>
+            {contentToDisplay}
+          </div>
+        ) : (
           <div 
             style={{lineHeight: '1.9', fontSize: '1.15rem', color: '#333'}} 
-            dangerouslySetInnerHTML={{ 
-              __html: sanitizeHTML(post.contenido) || '' 
-            }}
-            suppressHydrationWarning
+            dangerouslySetInnerHTML={{ __html: contentToDisplay }} 
           />
         )}
 
-        {/* VIDEO - SOLUCIÓN DEFINITIVA */}
+        {/* VIDEO - CON LLAVE ÚNICA PARA FORZAR RE-MOUNT */}
         {post.videoUrl && (
             <div className="mt-5 pt-4 border-top">
                 <h5 className="fw-bold text-dark mb-3 d-flex align-items-center gap-2">
                     <Video size={20} /> Video Relacionado
                 </h5>
-                <div className="ratio ratio-16x9 rounded-4 overflow-hidden shadow" style={{background:'#000'}}>
-                  {mounted && (() => {
-                    // Solo renderizar el iframe en el cliente
-                    const videoUrl = post.videoUrl;
-                    if (videoUrl.includes("youtube.com") || videoUrl.includes("youtu.be")) {
-                      const embedUrl = videoUrl.includes("watch?v=") 
-                        ? videoUrl.replace("watch?v=", "embed/") 
-                        : videoUrl.replace("youtu.be/", "youtube.com/embed/");
-                      
-                      return (
+                <div className="ratio ratio-16x9 rounded-4 overflow-hidden shadow" style={{background:'#000'}} key={`video-container-${id}`}>
+                    {post.videoUrl && (post.videoUrl.includes("youtube.com") || post.videoUrl.includes("youtu.be")) ? (
                         <iframe 
-                          src={embedUrl}
-                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-                          allowFullScreen
-                          title={`Video: ${post.titulo}`}
-                          className="w-100 h-100"
-                          style={{ border: 0 }}
-                          key={`video-${id}-${Date.now()}`}
+                            src={post.videoUrl.includes("watch?v=") 
+                                ? post.videoUrl.replace("watch?v=", "embed/") 
+                                : post.videoUrl.replace("youtu.be/", "youtube.com/embed/")} 
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                            allowFullScreen
+                            title={`Video: ${post.titulo}`}
+                            key={`video-iframe-${id}`}
+                            className="w-100 h-100"
                         />
-                      );
-                    } else {
-                      return (
-                        <video controls className="w-100 h-100">
-                          <source src={videoUrl} />
-                          Tu navegador no soporta la reproducción de video.
+                    ) : (
+                        <video controls className="w-100 h-100" key={`video-tag-${id}`}>
+                            <source src={post.videoUrl} />
+                            Tu navegador no soporta la reproducción de video.
                         </video>
-                      );
-                    }
-                  })()}
+                    )}
                 </div>
             </div>
         )}
