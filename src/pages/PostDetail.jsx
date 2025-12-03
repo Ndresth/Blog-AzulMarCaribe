@@ -143,21 +143,28 @@ export default function PostDetail() {
     return new Date(timestamp).toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' });
   }
 
-  // --- FUNCIÓN DE LIMPIEZA TOTAL PARA SEO ---
+  // --- FUNCIÓN DE LIMPIEZA AGRESIVA PARA SEO ---
   const cleanForSeo = (html) => {
     if (!html) return "";
     // 1. Quitar etiquetas HTML
     let tmp = document.createElement("DIV");
     tmp.innerHTML = html;
     let text = tmp.textContent || tmp.innerText || "";
-    // 2. Quitar comillas y saltos de línea que rompen el meta tag
-    return text.replace(/"/g, "'").replace(/\n/g, " ").substring(0, 150);
+    
+    // 2. REGLA DE ORO: Quitar comillas dobles y saltos de línea
+    // Esto evita que el texto se "salga" de la etiqueta meta
+    return text
+      .replace(/"/g, "'")   // Cambia comillas dobles por simples
+      .replace(/\n/g, " ")  // Cambia Enters por espacios
+      .replace(/\s+/g, " ") // Elimina espacios dobles
+      .substring(0, 150);   // Corta a 150 caracteres
   }
+  // --------------------------------------------
 
   if (loading) return <div className="container py-5 text-center"><div className="spinner-border text-primary"></div></div>;
   if (!post) return <div className="container py-5 text-center"><h3>Noticia no encontrada</h3><Link to="/">Volver</Link></div>;
 
-  // APLICAMOS LA LIMPIEZA
+  // Aplicamos limpieza al título y descripción
   const seoTitle = post ? post.titulo.replace(/"/g, "'") : "Noticia";
   const seoDesc = post ? cleanForSeo(post.contenido) : "";
   const seoImage = post?.imagen || "https://blog-azulmarcaribe.netlify.app/logo.png";
@@ -167,8 +174,9 @@ export default function PostDetail() {
       
       <Helmet>
         <title>{seoTitle} | Azul Mar Caribe</title>
-        <meta name="description" content={seoDesc} />
         
+        {/* Usamos las variables limpias para que no rompan el HTML */}
+        <meta name="description" content={seoDesc} />
         <meta property="og:type" content="article" />
         <meta property="og:title" content={seoTitle} />
         <meta property="og:description" content={seoDesc} />
@@ -234,8 +242,7 @@ export default function PostDetail() {
         </div>
       </article>
 
-      {/* RELACIONADAS Y COMENTARIOS (El resto sigue igual...) */}
-      
+      {/* ... (Resto de componentes igual: Relacionadas y Comentarios) ... */}
       {relacionadas.length > 0 && (
         <section className="mb-5">
             <h4 className="fw-bold mb-4 d-flex align-items-center gap-2 text-dark"><Sparkles className="text-warning" fill="orange" /> También te podría interesar</h4>
