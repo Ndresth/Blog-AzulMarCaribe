@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { db, auth } from '../firebase/config'; 
 import { 
@@ -23,11 +23,10 @@ export default function PostDetail() {
   const [currentUser, setCurrentUser] = useState(null);
   const [likes, setLikes] = useState(0);
   const [hasLiked, setHasLiked] = useState(false);
-  const [isClient, setIsClient] = useState(false);
-  const videoContainerRef = useRef(null);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setIsClient(true);
+    setMounted(true);
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
     });
@@ -146,17 +145,26 @@ export default function PostDetail() {
     return new Date(timestamp).toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' });
   }
 
-  // --- FUNCIÓN DE SANITIZACIÓN PARA HTML ---
+  // --- FUNCIÓN SUPER AGRESIVA PARA SANITIZAR HTML ---
   const sanitizeHTML = (html) => {
     if (!html) return "";
     
-    // Remover etiquetas body, html, head si existen
-    return html
-      .replace(/<\/?(body|html|head)[^>]*>/gi, '')
-      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+    // Primero, remover cualquier etiqueta <body>, <html>, <head>
+    let cleaned = html.replace(/<\/?(body|html|head)[^>]*>/gi, '');
+    
+    // Remover scripts completamente
+    cleaned = cleaned.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+    
+    // Remover estilos inline problemáticos
+    cleaned = cleaned.replace(/style\s*=\s*["'][^"']*["']/gi, '');
+    
+    // Remover atributos problemáticos
+    cleaned = cleaned.replace(/\son\w+\s*=\s*["'][^"']*["']/gi, '');
+    
+    return cleaned;
   };
 
-  // --- FUNCIÓN DE LIMPIEZA BLINDADA PARA SEO ---
+  // --- FUNCIÓN PARA LIMPIEZA DE SEO ---
   const cleanForSeo = (html) => {
     if (!html) return "";
     
@@ -175,7 +183,6 @@ export default function PostDetail() {
       .trim()
       .substring(0, 150);      // Cortar a 150 caracteres
   }
-  // --------------------------------------------
 
   if (loading) return <div className="container py-5 text-center"><div className="spinner-border text-primary"></div></div>;
   if (!post) return <div className="container py-5 text-center"><h3>Noticia no encontrada</h3><Link to="/">Volver</Link></div>;
@@ -190,7 +197,6 @@ export default function PostDetail() {
       
       <Helmet>
         <title>{seoTitle} | Azul Mar Caribe</title>
-        {/* Usamos las variables limpias */}
         <meta name="description" content={seoDesc} />
         
         <meta property="og:type" content="article" />
@@ -204,7 +210,7 @@ export default function PostDetail() {
         <ArrowLeft size={18} /> Volver al Inicio
       </Link>
 
-      <article className="mb-5 bg-white p-4 p-md-5 rounded-4 shadow-sm border-0">
+      <article className="mb-5 bg-white p-4 p-md-5 rounded-4 shadow-sm border-0" key={id}>
         <div className="d-flex justify-content-between align-items-center mb-3">
             <span className="badge bg-info text-dark fs-6 px-3 py-2 rounded-pill">{post.categoria}</span>
             <small className="text-muted d-flex align-items-center gap-1"><Calendar size={14} /> {formatearFecha(post.fecha)}</small>
@@ -218,46 +224,52 @@ export default function PostDetail() {
         
         {post.imagen && <img src={post.imagen} className="img-fluid rounded-4 shadow-sm mb-4 w-100" style={{maxHeight:'500px', objectFit:'cover'}} alt={post.titulo} onError={(e) => e.target.src = "https://via.placeholder.com/800"} />}
         
-        {/* CONTENIDO CON SANITIZACIÓN */}
-        <div style={{lineHeight: '1.9', fontSize: '1.15rem', color: '#333'}} 
-             dangerouslySetInnerHTML={{ __html: sanitizeHTML(post.contenido) || '' }} />
+        {/* CONTENIDO CON SANITIZACIÓN EXTREMA */}
+        {mounted && (
+          <div 
+            style={{lineHeight: '1.9', fontSize: '1.15rem', color: '#333'}} 
+            dangerouslySetInnerHTML={{ 
+              __html: sanitizeHTML(post.contenido) || '' 
+            }}
+            suppressHydrationWarning
+          />
+        )}
 
-        {/* VIDEO - SOLUCIÓN COMPLETA */}
+        {/* VIDEO - SOLUCIÓN DEFINITIVA */}
         {post.videoUrl && (
-            <div className="mt-5 pt-4 border-top" ref={videoContainerRef}>
+            <div className="mt-5 pt-4 border-top">
                 <h5 className="fw-bold text-dark mb-3 d-flex align-items-center gap-2">
                     <Video size={20} /> Video Relacionado
                 </h5>
-                <div className="position-relative" style={{ paddingBottom: '56.25%', background: '#000', borderRadius: '16px', overflow: 'hidden' }}>
-                    {isClient && post.videoUrl ? (
-                        (post.videoUrl.includes("youtube.com") || post.videoUrl.includes("youtu.be")) ? (
-                            <iframe 
-                                key={`video-${id}`}
-                                src={post.videoUrl.includes("watch?v=") 
-                                    ? post.videoUrl.replace("watch?v=", "embed/") 
-                                    : post.videoUrl.replace("youtu.be/", "youtube.com/embed/")} 
-                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-                                allowFullScreen
-                                title={`Video: ${post.titulo}`}
-                                className="position-absolute w-100 h-100"
-                                style={{ top: 0, left: 0, border: 0 }}
-                                loading="lazy"
-                            />
-                        ) : (
-                            <video 
-                                controls 
-                                className="position-absolute w-100 h-100"
-                                style={{ top: 0, left: 0, objectFit: 'contain' }}
-                            >
-                                <source src={post.videoUrl} />
-                                Tu navegador no soporta la reproducción de video.
-                            </video>
-                        )
-                    ) : (
-                        <div className="position-absolute w-100 h-100 d-flex align-items-center justify-content-center text-white">
-                            Cargando video...
-                        </div>
-                    )}
+                <div className="ratio ratio-16x9 rounded-4 overflow-hidden shadow" style={{background:'#000'}}>
+                  {mounted && (() => {
+                    // Solo renderizar el iframe en el cliente
+                    const videoUrl = post.videoUrl;
+                    if (videoUrl.includes("youtube.com") || videoUrl.includes("youtu.be")) {
+                      const embedUrl = videoUrl.includes("watch?v=") 
+                        ? videoUrl.replace("watch?v=", "embed/") 
+                        : videoUrl.replace("youtu.be/", "youtube.com/embed/");
+                      
+                      return (
+                        <iframe 
+                          src={embedUrl}
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                          allowFullScreen
+                          title={`Video: ${post.titulo}`}
+                          className="w-100 h-100"
+                          style={{ border: 0 }}
+                          key={`video-${id}-${Date.now()}`}
+                        />
+                      );
+                    } else {
+                      return (
+                        <video controls className="w-100 h-100">
+                          <source src={videoUrl} />
+                          Tu navegador no soporta la reproducción de video.
+                        </video>
+                      );
+                    }
+                  })()}
                 </div>
             </div>
         )}
