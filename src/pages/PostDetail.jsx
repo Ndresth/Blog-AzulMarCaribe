@@ -9,7 +9,7 @@ import {
 import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from 'firebase/auth';
 import { Helmet } from 'react-helmet-async';
 import ShareButtons from '../components/ShareButtons';
-import { ArrowLeft, MessageSquare, Send, User, Trash2, Calendar, Sparkles, Heart, LogIn, Video } from 'lucide-react';
+import { ArrowLeft, MessageSquare, Send, User, Trash2, Calendar, Sparkles, Video, Heart, LogIn } from 'lucide-react';
 
 export default function PostDetail() {
   const { id } = useParams();
@@ -24,7 +24,7 @@ export default function PostDetail() {
   const [likes, setLikes] = useState(0);
   const [hasLiked, setHasLiked] = useState(false);
 
-  // Detectar usuario en tiempo real
+  // Detectar usuario
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
@@ -50,7 +50,7 @@ export default function PostDetail() {
         if (docSnap.exists()) {
             const data = { id: docSnap.id, ...docSnap.data() };
             setPost(data);
-            setLikes(data.likes || 0);
+            setLikes(data.likes || 0); 
             fetchRelacionadas(data.categoria, data.id);
         } else { setPost(null); }
       } catch (error) { console.error("Error cargando post:", error); } finally { setLoading(false); }
@@ -65,11 +65,7 @@ export default function PostDetail() {
         const checkUserLike = async () => {
             const likeRef = doc(db, "posts", id, "likes", currentUser.uid);
             const likeSnap = await getDoc(likeRef);
-            if (likeSnap.exists()) {
-                setHasLiked(true);
-            } else {
-                setHasLiked(false);
-            }
+            if (likeSnap.exists()) { setHasLiked(true); } else { setHasLiked(false); }
         };
         checkUserLike();
     } else {
@@ -98,13 +94,11 @@ export default function PostDetail() {
     return () => unsubscribe();
   }, [id]);
 
-  // DAR LIKE
+  // LIKE
   const handleLike = async () => {
     if (!currentUser) return handleLogin(); 
-    
     const postRef = doc(db, "posts", id);
     const likeRef = doc(db, "posts", id, "likes", currentUser.uid);
-
     try {
         if (hasLiked) {
             setLikes(prev => prev - 1); 
@@ -128,7 +122,6 @@ export default function PostDetail() {
   const handleSubmitComentario = async (e) => {
     e.preventDefault();
     if (!nuevoComentario.trim()) return;
-    
     try {
       await addDoc(collection(db, "posts", id, "comments"), {
         autor: currentUser.displayName || "Usuario", 
@@ -142,9 +135,7 @@ export default function PostDetail() {
 
   const handleDeleteComment = async (commentId) => {
     if(window.confirm("¿Borrar comentario?")) {
-        try {
-            await deleteDoc(doc(db, "posts", id, "comments", commentId));
-        } catch (error) { console.error(error); }
+        try { await deleteDoc(doc(db, "posts", id, "comments", commentId)); } catch (error) { console.error(error); }
     }
   }
 
@@ -153,11 +144,19 @@ export default function PostDetail() {
     return new Date(timestamp).toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' });
   }
 
+  // --- FUNCIÓN DE LIMPIEZA (NUEVO) ---
+  const stripHtml = (html) => {
+    let tmp = document.createElement("DIV");
+    tmp.innerHTML = html;
+    return tmp.textContent || tmp.innerText || "";
+  }
+
   if (loading) return <div className="container py-5 text-center"><div className="spinner-border text-primary"></div></div>;
   if (!post) return <div className="container py-5 text-center"><h3>Noticia no encontrada</h3><Link to="/">Volver</Link></div>;
 
   const seoTitle = post ? post.titulo : "Noticia";
-  const seoDesc = post ? post.contenido.substring(0, 150) : "";
+  // AHORA USAMOS stripHtml() PARA QUE NO SE ROMPA EL META TAG
+  const seoDesc = post ? stripHtml(post.contenido).substring(0, 150) : "";
   const seoImage = post?.imagen || "https://blog-azulmarcaribe.netlify.app/logo.png";
 
   return (
@@ -192,26 +191,22 @@ export default function PostDetail() {
         
         <div style={{lineHeight: '1.9', fontSize: '1.15rem', color: '#333'}} dangerouslySetInnerHTML={{ __html: post.contenido }} />
 
-        {/* --- SECCIÓN DE VIDEO (Dual: YouTube o Archivo) --- */}
+        {/* --- SECCIÓN DE VIDEO --- */}
         {post.videoUrl && (
             <div className="mt-5 pt-4 border-top">
                 <h5 className="fw-bold text-dark mb-3 d-flex align-items-center gap-2"><Video size={20} /> Video Relacionado</h5>
-                <div className="rounded-4 overflow-hidden shadow" style={{background:'#000'}}>
-                    {/* LÓGICA: Si parece YouTube usamos iframe, si no, usamos video nativo */}
+                <div className="ratio ratio-16x9 rounded-4 overflow-hidden shadow" style={{background:'#000'}}>
                     {(post.videoUrl.includes("youtube.com") || post.videoUrl.includes("youtu.be")) ? (
-                        <div className="ratio ratio-16x9">
-                            <iframe 
-                                src={post.videoUrl.includes("watch?v=") 
-                                    ? post.videoUrl.replace("watch?v=", "embed/") 
-                                    : post.videoUrl.replace("youtu.be/", "youtube.com/embed/")} 
-                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-                                allowFullScreen
-                                title={`Video: ${post.titulo}`}
-                            ></iframe>
-                        </div>
+                        <iframe 
+                            src={post.videoUrl.includes("watch?v=") 
+                                ? post.videoUrl.replace("watch?v=", "embed/") 
+                                : post.videoUrl.replace("youtu.be/", "youtube.com/embed/")} 
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                            allowFullScreen
+                            title={`Video: ${post.titulo}`}
+                        ></iframe>
                     ) : (
-                        /* VIDEO SUBIDO (Firebase Storage) */
-                        <video controls className="w-100" style={{maxHeight: '500px', display: 'block'}}>
+                        <video controls className="w-100" style={{height: '100%'}}>
                             <source src={post.videoUrl} />
                             Tu navegador no soporta la reproducción de video.
                         </video>
@@ -219,8 +214,8 @@ export default function PostDetail() {
                 </div>
             </div>
         )}
-        {/* ------------------------------------------------ */}
 
+        {/* LIKES Y COMPARTIR */}
         <div className="mt-5 d-flex flex-column flex-md-row gap-3 align-items-center justify-content-between border-top pt-4">
             <button 
                 onClick={handleLike}
@@ -243,7 +238,7 @@ export default function PostDetail() {
                     <div key={rel.id} className="col-md-4">
                         <Link to={`/post/${rel.id}`} className="text-decoration-none text-dark">
                             <div className="card h-100 border-0 shadow-sm hover-effect">
-                                <img src={rel.imagen} alt={rel.titulo} className="card-img-top" style={{height:'120px', objectFit:'cover'}} />
+                                <img src={rel.imagen} alt={rel.titulo} className="card-img-top" style={{height:'120px', objectFit:'cover'}} onError={(e) => e.target.src = "https://via.placeholder.com/400"} />
                                 <div className="card-body p-3"><h6 className="card-title fw-bold mb-0" style={{fontSize: '0.9rem'}}>{rel.titulo}</h6></div>
                             </div>
                         </Link>
@@ -253,6 +248,7 @@ export default function PostDetail() {
         </section>
       )}
 
+      {/* Comentarios */}
       <section className="bg-white p-4 rounded-4 shadow-sm border-0">
         <h3 className="mb-4 fw-bold text-primary d-flex align-items-center gap-2 border-bottom pb-3">
             <MessageSquare size={24} /> Comentarios ({comentarios.length})
@@ -265,13 +261,7 @@ export default function PostDetail() {
                     <span className="fw-bold text-dark">Comentando como: {currentUser.displayName}</span>
                 </div>
                 <div className="mb-3">
-                    <textarea 
-                        className="form-control border-0 shadow-sm" 
-                        rows="3" 
-                        placeholder="¿Qué opinas?" 
-                        value={nuevoComentario} 
-                        onChange={(e) => setNuevoComentario(e.target.value)}
-                    ></textarea>
+                    <textarea className="form-control border-0 shadow-sm" rows="3" placeholder="¿Qué opinas?" value={nuevoComentario} onChange={(e) => setNuevoComentario(e.target.value)}></textarea>
                 </div>
                 <div className="text-end">
                     <button type="submit" className="btn btn-primary fw-bold px-4 rounded-pill d-inline-flex align-items-center gap-2"><Send size={16} /> Publicar</button>
