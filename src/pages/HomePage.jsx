@@ -135,7 +135,7 @@ export default function HomePage() {
         {/* Capa blanca semitransparente para que se lean las letras */}
         <div style={{
             position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', 
-            backgroundColor: 'rgba(255, 255, 255, 0.85)' 
+            backgroundColor: 'rgba(255, 255, 255, 0.6)' 
         }}></div>
 
         <div className="container text-center position-relative">
