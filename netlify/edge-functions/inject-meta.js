@@ -18,25 +18,29 @@ export default async (request, context) => {
     const data = await response.json();
 
     if (data && data.fields) {
-      // 3. Preparar los datos (CON LIMPIEZA EXTRA)
+      // --- LIMPIEZA DEL TÍTULO ---
       const rawTitle = data.fields.titulo?.stringValue || "Azul Mar Caribe";
-      const titulo = rawTitle.replace(/[<>"&]/g, ""); // Quitamos símbolos peligrosos del título
-      
+      // Quitamos etiquetas HTML si las hubiera en el título y comillas
+      const titulo = rawTitle.replace(/<[^>]+>/g, "").replace(/"/g, "'");
+
+      // --- LIMPIEZA PROFUNDA DE LA DESCRIPCIÓN (EL CAMBIO CLAVE) ---
       let rawDesc = data.fields.contenido?.stringValue || "Noticias culturales.";
       
-      // LIMPIEZA AGRESIVA: Quitamos comillas, saltos de línea Y símbolos < >
       const descripcion = rawDesc
-        .replace(/["\n\r]/g, " ")   // Quitar comillas y enters
-        .replace(/[<>"&]/g, "")     // Quitar < > " & (Vital para que no rompa el HTML)
-        .substring(0, 150) + "...";
-      
+        .replace(/<[^>]+>/g, " ")  // 1. Reemplaza CUALQUIER etiqueta (<p>, <h2>, </div>) por un espacio
+        .replace(/&nbsp;/g, " ")   // 2. Reemplaza el código de espacio html
+        .replace(/["\n\r]/g, " ")  // 3. Quita comillas y saltos de línea para no romper el meta
+        .replace(/\s+/g, " ")      // 4. Si quedaron muchos espacios juntos, déjalos como uno solo
+        .trim()                    // 5. Quita espacios al inicio y final
+        .substring(0, 150) + "..."; // 6. Cortar
+
       const imagen = data.fields.imagen?.stringValue || "https://blog-azulmarcaribe.netlify.app/logo.png";
       const currentUrl = request.url;
 
       const originalResponse = await context.next();
       const page = await originalResponse.text();
 
-      // 4. REEMPLAZO ROBUSTO
+      // --- REEMPLAZO EN EL HTML ---
       const updatedPage = page
         .replace(/<title>.*?<\/title>/s, `<title>${titulo} | Azul Mar Caribe</title>`)
         .replace(
