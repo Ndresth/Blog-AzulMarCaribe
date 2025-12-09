@@ -18,12 +18,17 @@ export default async (request, context) => {
     const data = await response.json();
 
     if (data && data.fields) {
-      const titulo = data.fields.titulo?.stringValue || "Azul Mar Caribe";
+      // 3. Preparar los datos (CON LIMPIEZA EXTRA)
+      const rawTitle = data.fields.titulo?.stringValue || "Azul Mar Caribe";
+      const titulo = rawTitle.replace(/[<>"&]/g, ""); // Quitamos símbolos peligrosos del título
       
-      // Limpieza de descripción para evitar romper el HTML
       let rawDesc = data.fields.contenido?.stringValue || "Noticias culturales.";
-      // Quitamos comillas dobles y saltos de línea
-      const descripcion = rawDesc.replace(/["\n\r]/g, " ").substring(0, 150) + "...";
+      
+      // LIMPIEZA AGRESIVA: Quitamos comillas, saltos de línea Y símbolos < >
+      const descripcion = rawDesc
+        .replace(/["\n\r]/g, " ")   // Quitar comillas y enters
+        .replace(/[<>"&]/g, "")     // Quitar < > " & (Vital para que no rompa el HTML)
+        .substring(0, 150) + "...";
       
       const imagen = data.fields.imagen?.stringValue || "https://blog-azulmarcaribe.netlify.app/logo.png";
       const currentUrl = request.url;
@@ -31,30 +36,21 @@ export default async (request, context) => {
       const originalResponse = await context.next();
       const page = await originalResponse.text();
 
-      // --- REEMPLAZO ROBUSTO (No importa el orden de los atributos) ---
+      // 4. REEMPLAZO ROBUSTO
       const updatedPage = page
-        // Reemplazar <title>
         .replace(/<title>.*?<\/title>/s, `<title>${titulo} | Azul Mar Caribe</title>`)
-        
-        // Reemplazar og:title (busca cualquier meta con property="og:title")
         .replace(
           /<meta[^>]*property=["']og:title["'][^>]*>/i, 
           `<meta property="og:title" content="${titulo}" />`
         )
-        
-        // Reemplazar og:description
         .replace(
           /<meta[^>]*property=["']og:description["'][^>]*>/i, 
           `<meta property="og:description" content="${descripcion}" />`
         )
-        
-        // Reemplazar og:image (¡Ojo! Bandera 'g' por si sale varias veces)
         .replace(
           /<meta[^>]*property=["']og:image["'][^>]*>/gi, 
           `<meta property="og:image" content="${imagen}" />`
         )
-        
-        // Reemplazar og:url
         .replace(
           /<meta[^>]*property=["']og:url["'][^>]*>/i, 
           `<meta property="og:url" content="${currentUrl}" />`
