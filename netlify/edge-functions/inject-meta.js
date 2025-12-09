@@ -30,7 +30,10 @@ export default async (request, context) => {
       console.log(">>> ✅ DATOS ENCONTRADOS. INYECTANDO...");
 
       const titulo = data.fields.titulo?.stringValue || "Azul Mar Caribe";
-      const descripcion = data.fields.contenido?.stringValue?.substring(0, 150) || "Noticias culturales.";
+      // Limpiamos un poco la descripción para que no rompa el HTML con comillas
+      let rawDesc = data.fields.contenido?.stringValue || "Noticias culturales.";
+      const descripcion = rawDesc.replace(/"/g, "'").substring(0, 150);
+
       // Si no hay imagen, usamos el logo por defecto
       const imagen = data.fields.imagen?.stringValue || "https://blog-azulmarcaribe.netlify.app/logo.png";
       const currentUrl = request.url; // La URL actual completa
@@ -39,13 +42,17 @@ export default async (request, context) => {
       const originalResponse = await context.next();
       const page = await originalResponse.text();
 
-      // --- REEMPLAZO QUIRÚRGICO ---
+      // --- REEMPLAZO QUIRÚRGICO MEJORADO ---
       // Reemplazamos las meta tags por defecto del index.html con las nuevas
       const updatedPage = page
         .replace(/<title>.*?<\/title>/, `<title>${titulo} | Azul Mar Caribe</title>`)
         .replace(/content="Azul Mar Caribe - Cultura y Entretenimiento"/, `content="${titulo}"`)
         .replace(/content="El mejor blog de noticias.*?"/, `content="${descripcion}..."`)
-        .replace(/content="https:\/\/blog-azulmarcaribe.netlify.app\/logo.png"/, `content="${imagen}"`)
+        
+        // CORRECCIÓN CLAVE: Agregamos la bandera 'g' al final del regex (/.../g)
+        // Esto asegura que reemplace TODAS las apariciones de la imagen por defecto
+        .replace(/content="https:\/\/blog-azulmarcaribe.netlify.app\/logo.png"/g, `content="${imagen}"`)
+        
         // IMPORTANTE: Cambiamos la URL canónica para que Facebook no se confunda
         .replace(/content="https:\/\/blog-azulmarcaribe.netlify.app\/"/, `content="${currentUrl}"`);
 
