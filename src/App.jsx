@@ -27,7 +27,9 @@ const ProtectedRoute = ({ children }) => {
     // LISTA DE ADMINS
     const adminsAutorizados = [
       "yamithadresjulio@gmail.com",
-      "xiomysofy24@gmail.com"
+      "xiomysofy24@gmail.com",
+      "Delosreyesxiomara75@gmail.com",
+      "linaospina003@gmail.com"
     ];
 
     const unsubscribe = onAuthStateChanged(auth, async (usuarioFirebase) => {
