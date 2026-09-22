@@ -3,7 +3,8 @@ import { db } from '../firebase/config';
 import { collection, getDocs, orderBy, query, limit, startAfter, where } from 'firebase/firestore';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
-import { Search, Film, Drama, Globe, BookOpen, ArrowDownCircle } from 'lucide-react'; 
+// 1. Agregamos el icono Newspaper
+import { Search, Film, Drama, Globe, BookOpen, ArrowDownCircle, Newspaper } from 'lucide-react'; 
 import PostSkeleton from '../components/PostSkeleton'; 
 import NewsTicker from '../components/NewsTicker';
 
@@ -112,6 +113,14 @@ export default function HomePage() {
     return nota.titulo.toLowerCase().includes(busqueda.toLowerCase());
   });
 
+  // Función para determinar el color de la etiqueta
+  const getBadgeColor = (categoria) => {
+    if (categoria === 'Cultural') return 'bg-success text-white';
+    if (categoria === 'Entretenimiento') return 'bg-warning text-dark';
+    if (categoria === 'Noticias') return 'bg-danger text-white'; // O el color que prefieras
+    return 'bg-primary text-white';
+  };
+
   return (
     <div>
       <Helmet>
@@ -126,13 +135,11 @@ export default function HomePage() {
         className="py-5 mb-5 shadow-sm position-relative" 
         style={{
             borderBottom: '5px solid #00b4d8',
-            // AQUÍ ESTÁ LA FOTO DE FONDO
             backgroundImage: "url('/banner.jpg')", 
             backgroundSize: 'cover',
             backgroundPosition: 'center'
         }}
       >
-        {/* Capa blanca semitransparente para que se lean las letras */}
         <div style={{
             position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', 
             backgroundColor: 'rgba(255, 255, 255, 0.6)' 
@@ -166,7 +173,7 @@ export default function HomePage() {
             </div>
 
             {/* FILTROS */}
-            <div className="d-flex justify-content-center gap-2">
+            <div className="d-flex justify-content-center flex-wrap gap-2">
                 <button onClick={() => setSearchParams({})} className={`btn rounded-pill px-4 fw-bold d-flex align-items-center gap-2 ${categoriaActual === 'Todas' ? 'btn-primary' : 'btn-outline-secondary'}`}>
                     <BookOpen size={18} /> Todas
                 </button>
@@ -175,6 +182,10 @@ export default function HomePage() {
                 </button>
                 <button onClick={() => setSearchParams({ cat: 'Entretenimiento' })} className={`btn rounded-pill px-4 fw-bold d-flex align-items-center gap-2 ${categoriaActual === 'Entretenimiento' ? 'btn-primary' : 'btn-outline-secondary'}`}>
                     <Film size={18} /> Entretenimiento
+                </button>
+                {/* 2. Nuevo botón de filtro para Noticias */}
+                <button onClick={() => setSearchParams({ cat: 'Noticias' })} className={`btn rounded-pill px-4 fw-bold d-flex align-items-center gap-2 ${categoriaActual === 'Noticias' ? 'btn-primary' : 'btn-outline-secondary'}`}>
+                    <Newspaper size={18} /> Noticias
                 </button>
             </div>
         </div>
@@ -206,8 +217,11 @@ export default function HomePage() {
                             style={{height: '100%', width: '100%', objectFit: 'cover'}}
                             onError={(e) => e.target.src = "https://via.placeholder.com/400?text=Azul+Mar+Caribe"}
                         />
-                        <span className={`position-absolute top-0 end-0 m-3 badge rounded-pill ${nota.categoria === 'Cultural' ? 'bg-success' : 'bg-warning text-dark'} px-3 py-2 shadow d-flex align-items-center gap-1`}>
-                            {nota.categoria === 'Cultural' ? <Drama size={14} /> : <Film size={14} />}
+                        {/* 3. Lógica dinámica para los colores y los iconos de la etiqueta */}
+                        <span className={`position-absolute top-0 end-0 m-3 badge rounded-pill px-3 py-2 shadow d-flex align-items-center gap-1 ${getBadgeColor(nota.categoria)}`}>
+                            {nota.categoria === 'Cultural' && <Drama size={14} />}
+                            {nota.categoria === 'Entretenimiento' && <Film size={14} />}
+                            {nota.categoria === 'Noticias' && <Newspaper size={14} />}
                             {nota.categoria}
                         </span>
                         </div>

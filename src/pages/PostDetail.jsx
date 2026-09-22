@@ -217,7 +217,13 @@ export default function PostDetail() {
 
       <article className="mb-5 bg-white p-4 p-md-5 rounded-4 shadow-sm border-0">
         <div className="d-flex justify-content-between align-items-center mb-3">
-            <span className="badge bg-info text-dark fs-6 px-3 py-2 rounded-pill">{post.categoria}</span>
+            <span className={`badge fs-6 px-3 py-2 rounded-pill ${
+                post.categoria === 'Cultural' ? 'bg-success text-white' : 
+                post.categoria === 'Entretenimiento' ? 'bg-warning text-dark' : 
+                post.categoria === 'Noticias' ? 'bg-danger text-white' : 'bg-info text-dark'
+            }`}>
+                {post.categoria}
+            </span>
             <small className="text-muted d-flex align-items-center gap-1"><Calendar size={14} /> {formatearFecha(post.fecha)}</small>
         </div>
         

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-// Importamos los íconos de Lucide (Agregué Users y ShieldCheck)
-import { Home, Drama, Film, Facebook, Instagram, Twitter, Youtube, Mail, Users, ShieldCheck } from 'lucide-react';
+// Agregamos el ícono 'Newspaper' para la sección de Noticias
+import { Home, Drama, Film, Newspaper, Facebook, Instagram, Twitter, Youtube, Mail, Users, ShieldCheck } from 'lucide-react';
 
 export default function Footer() {
   
@@ -40,6 +40,12 @@ export default function Footer() {
               <li className="mb-2">
                 <Link to="/?cat=Entretenimiento" onClick={scrollTop} className="text-white-50 text-decoration-none hover-white d-flex align-items-center gap-2">
                   <Film size={16} /> Entretenimiento
+                </Link>
+              </li>
+              {/* 👇 AQUI ESTÁ EL NUEVO ENLACE DE NOTICIAS 👇 */}
+              <li className="mb-2">
+                <Link to="/?cat=Noticias" onClick={scrollTop} className="text-white-50 text-decoration-none hover-white d-flex align-items-center gap-2">
+                  <Newspaper size={16} /> Noticias
                 </Link>
               </li>
               <li className="mb-2">

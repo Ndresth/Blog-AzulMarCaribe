@@ -50,6 +50,11 @@ h1, h2, h3, h4 {
   color: #333;
 }
 
+.badge-noticias {
+  background-color: #e63946; /* Un rojo moderno que resalta bien para noticias */
+  color: white;
+}
+
 /* Botones */
 .btn-primary-gradient {
   background: linear-gradient(45deg, #0077b6, #00b4d8);

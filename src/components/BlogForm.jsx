@@ -255,6 +255,7 @@ export default function BlogForm({ onPostCreated, postToEdit, onCancel, onNotify
                   <select name="categoria" className="form-select" value={formData.categoria} onChange={handleChange}>
                       <option value="Cultural">Cultural</option>
                       <option value="Entretenimiento">Entretenimiento</option>
+                      <option value="Noticias">Noticias</option>
                   </select>
               </div>
 
