@@ -3,6 +3,7 @@ import { auth, db } from '../firebase/config';
 import { doc, setDoc } from 'firebase/firestore';
 import { updateProfile } from 'firebase/auth';
 import { UserCircle, Save, AlertCircle, CheckCircle } from 'lucide-react';
+import './admin.css';
 
 export default function CreateProfile() {
   const [nombre, setNombre] = useState('');
@@ -28,14 +29,14 @@ export default function CreateProfile() {
     try {
       // 1. Guardar tu ficha en la Base de Datos
       await setDoc(doc(db, "users", user.uid), {
-        nombre: nombre,
+        nombre: nombre.trim(),
         email: user.email,
         fechaRegistro: Date.now()
       });
 
       // 2. Actualizar tu perfil interno de Google
       await updateProfile(user, {
-        displayName: nombre
+        displayName: nombre.trim()
       });
 
       // Mensaje de éxito visual
@@ -54,57 +55,49 @@ export default function CreateProfile() {
   };
 
   return (
-    <div className="container d-flex justify-content-center align-items-center vh-100">
-      <div className="card shadow p-5 border-0 rounded-4" style={{maxWidth: '450px', width: '100%'}}>
-        
-        <div className="text-center mb-4 text-primary">
-            <UserCircle size={64} strokeWidth={1.5} />
+    <div className="auth-page">
+      <div className="auth-card text-start">
+        <div className="text-center">
+          <span className="d-inline-flex align-items-center justify-content-center rounded-4 mb-3" style={{ width: 60, height: 60, background: 'var(--ocean-light)', color: 'var(--ocean)' }}>
+            <UserCircle size={32} strokeWidth={1.5} />
+          </span>
+          <h1 className="h4 fw-bold mb-2">Bienvenido al equipo</h1>
+          <p className="text-secondary small mb-4">
+            Antes de publicar, dinos cómo quieres firmar. Este nombre aparecerá como <strong>autor</strong> en tus noticias.
+          </p>
         </div>
 
-        <h2 className="mb-2 fw-bold text-center text-dark">Bienvenido al Equipo</h2>
-        <p className="text-muted text-center mb-4 small">
-            Antes de empezar a publicar, necesitamos saber quién eres. Este nombre aparecerá como <strong>Autor</strong> en tus noticias.
-        </p>
-        
-        {/* MENSAJE DE ERROR */}
         {error && (
-            <div className="alert alert-danger d-flex align-items-center gap-2 p-2 mb-3 small" role="alert">
-                <AlertCircle size={16} /> {error}
-            </div>
+          <div className="alert alert-danger d-flex align-items-center gap-2 py-2 small" role="alert">
+            <AlertCircle size={16} /> {error}
+          </div>
         )}
-
-        {/* MENSAJE DE ÉXITO */}
         {success && (
-            <div className="alert alert-success d-flex align-items-center gap-2 p-2 mb-3 small" role="alert">
-                <CheckCircle size={16} /> {success}
-            </div>
+          <div className="alert alert-success d-flex align-items-center gap-2 py-2 small" role="status">
+            <CheckCircle size={16} /> {success}
+          </div>
         )}
-        
-        <form onSubmit={handleSubmit}>
-            <div className="mb-4">
-                <label className="form-label fw-bold small text-secondary">TU NOMBRE DE AUTOR</label>
-                <input 
-                    type="text" 
-                    className="form-control form-control-lg" 
-                    placeholder=""
-                    value={nombre}
-                    onChange={(e) => setNombre(e.target.value)}
-                    autoFocus
-                    disabled={loading || success} // Bloqueamos si está cargando o ya terminó
-                />
-            </div>
 
-            <button 
-                type="submit" 
-                className="btn btn-primary w-100 py-3 rounded-pill fw-bold d-flex align-items-center justify-content-center gap-2"
-                disabled={loading || success}
-            >
-                {loading || success ? (
-                    <>Guardando...</>
-                ) : (
-                    <><Save size={20} /> Guardar y Continuar</>
-                )}
-            </button>
+        <form onSubmit={handleSubmit}>
+          <label htmlFor="nombre" className="field-label">Nombre de autor</label>
+          <input
+            id="nombre"
+            type="text"
+            className="form-control form-control-lg mb-4"
+            placeholder="Ej. Xiomara De los Reyes"
+            value={nombre}
+            onChange={(e) => setNombre(e.target.value)}
+            maxLength={60}
+            autoFocus
+            disabled={loading || !!success}
+          />
+          <button
+            type="submit"
+            className="btn btn-primary w-100 py-2 rounded-pill fw-semibold d-flex align-items-center justify-content-center gap-2"
+            disabled={loading || !!success || !nombre.trim()}
+          >
+            {loading || success ? <><span className="spinner-border spinner-border-sm" /> Guardando…</> : <><Save size={18} /> Guardar y continuar</>}
+          </button>
         </form>
       </div>
     </div>
