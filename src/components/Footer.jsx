@@ -15,7 +15,7 @@ export default function Footer() {
           {/* COLUMNA 1 */}
           <div className="col-md-4">
             <div className="d-flex align-items-center gap-2 mb-3">
-                <img src="/logo.png" alt="Logo" style={{height: '40px', background:'white', borderRadius:'50%', padding:'2px'}} />
+                <img src="/logo-sm.png" alt="Azul Mar Caribe" loading="lazy" style={{height: '40px', background:'white', borderRadius:'50%', padding:'2px'}} />
                 <h5 className="mb-0 fw-bold">Azul Mar Caribe</h5>
             </div>
             <p className="text-white-50 small">

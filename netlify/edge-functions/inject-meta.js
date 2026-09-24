@@ -1,69 +1,85 @@
+const PROJECT_ID = "blog-cultural-app";
+const SITE_URL = "https://blog-azulmarcaribe.netlify.app";
+const DEFAULT_IMAGE = `${SITE_URL}/logo.png`;
+
+// Escapa texto para usarlo dentro de atributos/etiquetas HTML
+const escapeHtml = (str) =>
+  String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
+const decodeEntities = (str) =>
+  str
+    .replace(/&nbsp;/g, " ")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&");
+
+const toPlainText = (html) =>
+  decodeEntities(String(html).replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").trim();
+
 export default async (request, context) => {
   const url = new URL(request.url);
-  
-  if (!url.pathname.startsWith("/post/")) {
-    return context.next();
-  }
+  const match = url.pathname.match(/^\/post\/([A-Za-z0-9_-]{1,128})\/?$/);
 
-  const pathParts = url.pathname.split("/");
-  const postId = pathParts[pathParts.length - 1];
-  
-  const PROJECT_ID = "blog-cultural-app"; 
+  // Solo IDs válidos de Firestore; cualquier otra ruta pasa sin tocar
+  if (!match) return context.next();
+  const postId = match[1];
+
   const apiUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/posts/${postId}`;
-  
+
   try {
     const response = await fetch(apiUrl);
     if (!response.ok) return context.next();
 
     const data = await response.json();
+    if (!data?.fields) return context.next();
 
-    if (data && data.fields) {
-      // --- LIMPIEZA DEL TÍTULO ---
-      const rawTitle = data.fields.titulo?.stringValue || "Azul Mar Caribe";
-      // Quitamos etiquetas HTML si las hubiera en el título y comillas
-      const titulo = rawTitle.replace(/<[^>]+>/g, "").replace(/"/g, "'");
+    const titulo = escapeHtml(toPlainText(data.fields.titulo?.stringValue || "Azul Mar Caribe"));
 
-      // --- LIMPIEZA PROFUNDA DE LA DESCRIPCIÓN (EL CAMBIO CLAVE) ---
-      let rawDesc = data.fields.contenido?.stringValue || "Noticias culturales.";
-      
-      const descripcion = rawDesc
-        .replace(/<[^>]+>/g, " ")  // 1. Reemplaza CUALQUIER etiqueta (<p>, <h2>, </div>) por un espacio
-        .replace(/&nbsp;/g, " ")   // 2. Reemplaza el código de espacio html
-        .replace(/["\n\r]/g, " ")  // 3. Quita comillas y saltos de línea para no romper el meta
-        .replace(/\s+/g, " ")      // 4. Si quedaron muchos espacios juntos, déjalos como uno solo
-        .trim()                    // 5. Quita espacios al inicio y final
-        .substring(0, 150) + "..."; // 6. Cortar
+    let desc = toPlainText(data.fields.contenido?.stringValue || "Noticias culturales del Caribe.");
+    if (desc.length > 160) desc = desc.substring(0, 157).trimEnd() + "...";
+    const descripcion = escapeHtml(desc);
 
-      const imagen = data.fields.imagen?.stringValue || "https://blog-azulmarcaribe.netlify.app/logo.png";
-      const currentUrl = request.url;
+    const rawImage = data.fields.imagen?.stringValue || "";
+    const imagen = escapeHtml(/^https:\/\//i.test(rawImage) ? rawImage : DEFAULT_IMAGE);
+    const canonical = escapeHtml(`${SITE_URL}/post/${postId}`);
 
-      const originalResponse = await context.next();
-      const page = await originalResponse.text();
+    const originalResponse = await context.next();
+    const page = await originalResponse.text();
 
-      // --- REEMPLAZO EN EL HTML ---
-      const updatedPage = page
-        .replace(/<title>.*?<\/title>/s, `<title>${titulo} | Azul Mar Caribe</title>`)
-        .replace(
-          /<meta[^>]*property=["']og:title["'][^>]*>/i, 
-          `<meta property="og:title" content="${titulo}" />`
-        )
-        .replace(
-          /<meta[^>]*property=["']og:description["'][^>]*>/i, 
-          `<meta property="og:description" content="${descripcion}" />`
-        )
-        .replace(
-          /<meta[^>]*property=["']og:image["'][^>]*>/gi, 
-          `<meta property="og:image" content="${imagen}" />`
-        )
-        .replace(
-          /<meta[^>]*property=["']og:url["'][^>]*>/i, 
-          `<meta property="og:url" content="${currentUrl}" />`
-        );
+    const metaTags = [
+      `<meta name="description" content="${descripcion}" />`,
+      `<meta property="og:type" content="article" />`,
+      `<meta property="og:title" content="${titulo}" />`,
+      `<meta property="og:description" content="${descripcion}" />`,
+      `<meta property="og:image" content="${imagen}" />`,
+      `<meta property="og:url" content="${canonical}" />`,
+      `<meta name="twitter:card" content="summary_large_image" />`,
+      `<meta name="twitter:title" content="${titulo}" />`,
+      `<meta name="twitter:description" content="${descripcion}" />`,
+      `<meta name="twitter:image" content="${imagen}" />`,
+      `<link rel="canonical" href="${canonical}" />`,
+    ].join("\n    ");
 
-      return new Response(updatedPage, {
-        headers: { "content-type": "text/html" },
-      });
-    }
+    // Quitamos las meta genéricas del index.html y ponemos las de la noticia
+    const updatedPage = page
+      .replace(/<title>[\s\S]*?<\/title>/i, `<title>${titulo} | Azul Mar Caribe</title>`)
+      .replace(/<meta[^>]*(property|name)=["'](og:(type|title|description|image|url)|description|twitter:[a-z]+)["'][^>]*>\s*/gi, "")
+      .replace(/<link[^>]*rel=["']canonical["'][^>]*>\s*/gi, "")
+      .replace(/<\/head>/i, `    ${metaTags}\n  </head>`);
+
+    const headers = new Headers(originalResponse.headers);
+    headers.set("content-type", "text/html; charset=utf-8");
+    headers.delete("content-length");
+    headers.set("cache-control", "public, max-age=0, must-revalidate");
+
+    return new Response(updatedPage, { status: originalResponse.status, headers });
   } catch (error) {
     console.log("Error Edge Function:", error);
   }

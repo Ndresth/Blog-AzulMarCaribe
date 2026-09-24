@@ -10,6 +10,10 @@ import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from 'firebas
 import { Helmet } from 'react-helmet-async';
 import ShareButtons from '../components/ShareButtons';
 import { ArrowLeft, MessageSquare, Send, User, Trash2, Calendar, Sparkles, Heart, LogIn, Video } from 'lucide-react';
+import { isAdminEmail, getBadgeClass, handleImageError, formatearFecha, SITE_URL, FALLBACK_IMAGE } from '../config/site';
+import { sanitizeHtml, htmlToText, getYouTubeEmbedUrl } from '../utils/html';
+
+const MAX_COMENTARIO = 1000;
 
 export default function PostDetail() {
   const { id } = useParams();
@@ -31,8 +35,7 @@ export default function PostDetail() {
     return () => unsubscribe();
   }, []);
 
-  const adminsAutorizados = ["yamithadresjulio@gmail.com", "xiomysofy24@gmail.com"];
-  const isAdmin = currentUser && adminsAutorizados.includes(currentUser.email); 
+  const isAdmin = isAdminEmail(currentUser?.email);
 
   const handleLogin = async () => {
     const provider = new GoogleAuthProvider();
@@ -49,7 +52,7 @@ export default function PostDetail() {
         if (docSnap.exists()) {
             const data = { id: docSnap.id, ...docSnap.data() };
             // SANITIZAR EL CONTENIDO AL CARGAR
-            data.contenido = sanitizeContentOnLoad(data.contenido || '');
+            data.contenido = sanitizeHtml(data.contenido || '');
             setPost(data);
             setLikes(data.likes || 0); 
             fetchRelacionadas(data.categoria, data.id);
@@ -57,7 +60,6 @@ export default function PostDetail() {
       } catch (error) { console.error("Error cargando post:", error); } finally { setLoading(false); }
     };
     getPost();
-    window.scrollTo(0, 0);
   }, [id]);
 
   // VERIFICAR LIKE
@@ -122,12 +124,13 @@ export default function PostDetail() {
   // COMENTAR
   const handleSubmitComentario = async (e) => {
     e.preventDefault();
-    if (!nuevoComentario.trim()) return;
+    const texto = nuevoComentario.trim().slice(0, MAX_COMENTARIO);
+    if (!texto || !currentUser) return;
     try {
       await addDoc(collection(db, "posts", id, "comments"), {
         autor: currentUser.displayName || "Usuario", 
         email: currentUser.email, 
-        texto: nuevoComentario, 
+        texto, 
         fecha: Date.now()
       });
       setNuevoComentario('');
@@ -140,63 +143,15 @@ export default function PostDetail() {
     }
   }
 
-  const formatearFecha = (timestamp) => {
-    if(!timestamp) return "";
-    return new Date(timestamp).toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' });
-  }
-
-  // --- SANITIZACIÓN AL CARGAR EL CONTENIDO ---
-  const sanitizeContentOnLoad = (html) => {
-    if (!html) return "";
-    
-    // AGRESIVA: Eliminar TODO excepto etiquetas básicas seguras
-    const allowedTags = ['p', 'br', 'b', 'i', 'u', 'strong', 'em', 'ul', 'ol', 'li', 'h2', 'h3', 'h4'];
-    
-    // 1. Eliminar todas las etiquetas excepto las permitidas
-    let sanitized = html.replace(/<\/?([^>\s]+)[^>]*>/g, (match, tag) => {
-      const lowerTag = tag.toLowerCase();
-      if (allowedTags.includes(lowerTag)) {
-        // Solo mantener la etiqueta básica sin atributos
-        return match.startsWith('</') ? `</${lowerTag}>` : `<${lowerTag}>`;
-      }
-      return ''; // Eliminar etiqueta no permitida
-    });
-    
-    // 2. Eliminar scripts, estilos, comentarios (por si acaso)
-    sanitized = sanitized
-      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-      .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
-      .replace(/<!--[\s\S]*?-->/g, '');
-    
-    // 3. Eliminar cualquier rastro de body, html, head
-    sanitized = sanitized.replace(/<\/?(body|html|head)[^>]*>/gi, '');
-    
-    return sanitized.trim();
-  };
-
-  // --- FUNCIÓN DE LIMPIEZA PARA SEO ---
-  const cleanForSeo = (text) => {
-    if (!text) return "";
-    
-    // Convertir HTML a texto
-    let tmp = document.createElement("DIV");
-    tmp.innerHTML = text;
-    let cleanText = tmp.textContent || tmp.innerText || "";
-    
-    return cleanText
-      .replace(/"/g, "'")
-      .replace(/\s+/g, " ")
-      .trim()
-      .substring(0, 150);
-  }
-
   if (loading) return <div className="container py-5 text-center"><div className="spinner-border text-primary"></div></div>;
   if (!post) return <div className="container py-5 text-center"><h3>Noticia no encontrada</h3><Link to="/">Volver</Link></div>;
 
   // APLICAMOS LA LIMPIEZA PARA SEO
-  const seoTitle = cleanForSeo(post.titulo);
-  const seoDesc = cleanForSeo(post.contenido);
-  const seoImage = post?.imagen || "https://blog-azulmarcaribe.netlify.app/logo.png";
+  const seoTitle = htmlToText(post.titulo);
+  const seoDesc = htmlToText(post.contenido).substring(0, 160);
+  const seoImage = post.imagen || `${SITE_URL}${FALLBACK_IMAGE}`;
+  const canonicalUrl = `${SITE_URL}/post/${id}`;
+  const youtubeEmbed = post.videoUrl ? getYouTubeEmbedUrl(post.videoUrl) : null;
 
   return (
     <div className="container py-5" style={{maxWidth: '900px'}}>
@@ -208,7 +163,9 @@ export default function PostDetail() {
         <meta property="og:title" content={seoTitle} />
         <meta property="og:description" content={seoDesc} />
         <meta property="og:image" content={seoImage} />
-        <meta property="og:url" content={window.location.href} />
+        <meta property="og:url" content={canonicalUrl} />
+        <link rel="canonical" href={canonicalUrl} />
+        <meta name="twitter:card" content="summary_large_image" />
       </Helmet>
 
       <Link to="/" className="btn btn-light mb-4 shadow-sm fw-bold text-primary px-4 rounded-pill d-inline-flex align-items-center gap-2">
@@ -217,11 +174,7 @@ export default function PostDetail() {
 
       <article className="mb-5 bg-white p-4 p-md-5 rounded-4 shadow-sm border-0">
         <div className="d-flex justify-content-between align-items-center mb-3">
-            <span className={`badge fs-6 px-3 py-2 rounded-pill ${
-                post.categoria === 'Cultural' ? 'bg-success text-white' : 
-                post.categoria === 'Entretenimiento' ? 'bg-warning text-dark' : 
-                post.categoria === 'Noticias' ? 'bg-danger text-white' : 'bg-info text-dark'
-            }`}>
+            <span className={`badge fs-6 px-3 py-2 rounded-pill ${getBadgeClass(post.categoria)}`}>
                 {post.categoria}
             </span>
             <small className="text-muted d-flex align-items-center gap-1"><Calendar size={14} /> {formatearFecha(post.fecha)}</small>
@@ -233,13 +186,13 @@ export default function PostDetail() {
             <span className="small fw-bold">Por: {post.autor || "Redacción"}</span>
         </div>
         
-        {post.imagen && <img src={post.imagen} className="img-fluid rounded-4 shadow-sm mb-4 w-100" style={{maxHeight:'500px', objectFit:'cover'}} alt={post.titulo} onError={(e) => e.target.src = "https://via.placeholder.com/800"} />}
+        {post.imagen && <img src={post.imagen} className="img-fluid rounded-4 shadow-sm mb-4 w-100" style={{maxHeight:'500px', objectFit:'cover'}} alt={post.titulo} onError={handleImageError} />}
         
         {/* CONTENIDO YA SANITIZADO */}
         <div 
+          className="post-content"
           style={{lineHeight: '1.9', fontSize: '1.15rem', color: '#333'}} 
           dangerouslySetInnerHTML={{ __html: post.contenido || '' }}
-          suppressHydrationWarning
         />
 
         {/* VIDEO - CON LLAVE ÚNICA */}
@@ -249,11 +202,9 @@ export default function PostDetail() {
                     <Video size={20} /> Video Relacionado
                 </h5>
                 <div className="ratio ratio-16x9 rounded-4 overflow-hidden shadow" style={{background:'#000'}}>
-                    {post.videoUrl.includes("youtube.com") || post.videoUrl.includes("youtu.be") ? (
+                    {youtubeEmbed ? (
                         <iframe 
-                            src={post.videoUrl.includes("watch?v=") 
-                                ? post.videoUrl.replace("watch?v=", "embed/") 
-                                : post.videoUrl.replace("youtu.be/", "youtube.com/embed/")} 
+                            src={youtubeEmbed} 
                             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
                             allowFullScreen
                             title={`Video: ${post.titulo}`}
@@ -281,7 +232,7 @@ export default function PostDetail() {
                 {hasLiked ? 'Te gusta' : 'Me gusta'} 
                 <span className="badge bg-white text-danger ms-1 rounded-pill border border-danger">{likes}</span>
             </button>
-            <div className="w-100 w-md-auto"><ShareButtons title={post.titulo} /></div>
+            <div className="w-100 w-md-auto"><ShareButtons title={seoTitle} url={canonicalUrl} /></div>
         </div>
       </article>
 
@@ -296,7 +247,7 @@ export default function PostDetail() {
                     <div key={rel.id} className="col-md-4">
                         <Link to={`/post/${rel.id}`} className="text-decoration-none text-dark">
                             <div className="card h-100 border-0 shadow-sm hover-effect">
-                                <img src={rel.imagen} alt={rel.titulo} className="card-img-top" style={{height:'120px', objectFit:'cover'}} onError={(e) => e.target.src = "https://via.placeholder.com/400"} />
+                                <img src={rel.imagen} alt={rel.titulo} className="card-img-top" style={{height:'120px', objectFit:'cover'}} loading="lazy" onError={handleImageError} />
                                 <div className="card-body p-3"><h6 className="card-title fw-bold mb-0" style={{fontSize: '0.9rem'}}>{rel.titulo}</h6></div>
                             </div>
                         </Link>
@@ -315,11 +266,12 @@ export default function PostDetail() {
         {currentUser ? (
             <form onSubmit={handleSubmitComentario} className="mb-5 bg-light p-4 rounded-3 border">
                 <div className="d-flex align-items-center gap-2 mb-3">
-                    <img src={currentUser.photoURL || "https://ui-avatars.com/api/?name="+currentUser.displayName} alt="Avatar" className="rounded-circle" width="30" />
+                    <img src={currentUser.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.displayName || 'U')}`} alt="Avatar" className="rounded-circle" width="30" height="30" referrerPolicy="no-referrer" />
                     <span className="fw-bold text-dark">Comentando como: {currentUser.displayName}</span>
                 </div>
                 <div className="mb-3">
-                    <textarea className="form-control border-0 shadow-sm" rows="3" placeholder="¿Qué opinas?" value={nuevoComentario} onChange={(e) => setNuevoComentario(e.target.value)}></textarea>
+                    <textarea className="form-control border-0 shadow-sm" rows="3" placeholder="¿Qué opinas?" maxLength={MAX_COMENTARIO} value={nuevoComentario} onChange={(e) => setNuevoComentario(e.target.value)}></textarea>
+                    <small className="text-muted d-block text-end mt-1">{nuevoComentario.length}/{MAX_COMENTARIO}</small>
                 </div>
                 <div className="text-end">
                     <button type="submit" className="btn btn-primary fw-bold px-4 rounded-pill d-inline-flex align-items-center gap-2"><Send size={16} /> Publicar</button>
@@ -343,7 +295,7 @@ export default function PostDetail() {
                                 <div className="bg-secondary rounded-circle d-flex align-items-center justify-content-center text-white" style={{width:'30px', height:'30px'}}><User size={16} /></div> {c.autor}
                             </h6>
                             <small className="text-muted d-block mb-2 ms-5" style={{fontSize:'0.75rem', marginTop: '-5px'}}>{formatearFecha(c.fecha)}</small>
-                            <p className="mb-0 text-secondary ms-5">{c.texto}</p>
+                            <p className="mb-0 text-secondary ms-5" style={{whiteSpace: 'pre-line', wordBreak: 'break-word'}}>{c.texto}</p>
                         </div>
                         {isAdmin && (
                             <button onClick={() => handleDeleteComment(c.id)} className="btn btn-outline-danger btn-sm border-0 p-2 rounded-circle hover-bg-danger" title="Eliminar"><Trash2 size={18} /></button>

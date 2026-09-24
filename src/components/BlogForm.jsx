@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { db, storage, auth } from '../firebase/config';
+import React, { useState, useEffect } from 'react';
+import { app, db, auth } from '../firebase/config';
 import { collection, addDoc, updateDoc, doc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { 
   Editor, EditorProvider, Toolbar, 
   BtnBold, BtnItalic, BtnUnderline, 
@@ -10,68 +10,28 @@ import {
 } from 'react-simple-wysiwyg';
 import { Link as LinkIcon, Send, RefreshCw, UploadCloud, Video, CheckCircle } from 'lucide-react'; 
 
-// --- FUNCIÓN DE SANITIZACIÓN AGREGADA ---
-const sanitizeEditorHTML = (html) => {
-  if (!html) return "";
-  
-  // 1. Eliminar DOCTYPE, comentarios, estilos CSS
-  let clean = html
-    .replace(/<!DOCTYPE[^>]*>/gi, '')
-    .replace(/<!--[\s\S]*?-->/g, '')
-    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-    .replace(/<meta[^>]*>/gi, '')
-    .replace(/<link[^>]*>/gi, '');
-  
-  // 2. Eliminar etiquetas peligrosas (body, html, head, etc.)
-  clean = clean.replace(/<\/?(body|html|head|title)[^>]*>/gi, '');
-  
-  // 3. Reemplazar etiquetas problemáticas pero preservar contenido
-  clean = clean.replace(/<\/?o:p[^>]*>/gi, ''); // Etiquetas Office
-  clean = clean.replace(/<\/?span[^>]*>/gi, ''); // Spans innecesarios
-  
-  // 4. Limpiar atributos problemáticos pero mantener clases básicas
-  clean = clean.replace(/\s(class|style|id|lang|dir|align)\s*=\s*["'][^"']*["']/gi, '');
-  
-  // 5. Normalizar etiquetas
-  clean = clean.replace(/<p[^>]*><\/p>/gi, ''); // Párrafos vacíos
-  clean = clean.replace(/<strong>/gi, '<b>').replace(/<\/strong>/gi, '</b>');
-  clean = clean.replace(/<em>/gi, '<i>').replace(/<\/em>/gi, '</i>');
-  
-  // 6. Asegurar que todas las etiquetas estén cerradas (para párrafos básicos)
-  const tags = ['p', 'b', 'i', 'u', 'ul', 'ol', 'li', 'h2', 'h3', 'h4'];
-  tags.forEach(tag => {
-    const regex = new RegExp(`<${tag}[^>]*>`, 'gi');
-    clean = clean.replace(regex, `<${tag}>`);
-  });
-  
-  // 7. Eliminar espacios múltiples y saltos de línea innecesarios
-  clean = clean.replace(/\n\s*\n/g, '\n').replace(/\s+/g, ' ').trim();
-  
-  return clean;
+import { CATEGORIAS } from '../config/site';
+import { sanitizeHtml } from '../utils/html';
+
+const MAX_IMAGE_MB = 5;
+const MAX_VIDEO_MB = 100;
+
+const EMPTY_FORM = { titulo: '', categoria: 'Cultural', imagen: '', videoUrl: '', contenido: '' };
+
+const storage = getStorage(app);
+
+const uploadFile = async (file, folder) => {
+  const safeName = file.name.replace(/[^\w.-]/g, '_');
+  const storageRef = ref(storage, `${folder}/${Date.now()}_${safeName}`);
+  await uploadBytes(storageRef, file);
+  return getDownloadURL(storageRef);
 };
 
 export default function BlogForm({ onPostCreated, postToEdit, onCancel, onNotify }) {
-  const [formData, setFormData] = useState(() => {
-    if (postToEdit) {
-      // SANITIZAR EL CONTENIDO AL CARGAR PARA EDITAR
-      return { 
-        ...postToEdit,
-        contenido: sanitizeEditorHTML(postToEdit.contenido || '')
-      };
-    } 
-    return {
-      titulo: '',
-      categoria: 'Cultural',
-      imagen: '',
-      videoUrl: '',
-      contenido: ''
-    };
-  });
-  
-  const [file, setFile] = useState(null); 
+  const [formData, setFormData] = useState(EMPTY_FORM);
+  const [imageFile, setImageFile] = useState(null);
+  const [videoFile, setVideoFile] = useState(null);
   const [loading, setLoading] = useState(false);
-  const editorRef = useRef(null);
   
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [linkUrl, setLinkUrl] = useState('');
@@ -80,55 +40,59 @@ export default function BlogForm({ onPostCreated, postToEdit, onCancel, onNotify
   useEffect(() => {
     if (postToEdit) {
       setFormData({
-        titulo: postToEdit.titulo,
-        categoria: postToEdit.categoria,
-        imagen: postToEdit.imagen,
+        titulo: postToEdit.titulo || '',
+        categoria: postToEdit.categoria || 'Cultural',
+        imagen: postToEdit.imagen || '',
         videoUrl: postToEdit.videoUrl || '',
-        contenido: sanitizeEditorHTML(postToEdit.contenido || '')
+        contenido: sanitizeHtml(postToEdit.contenido || '')
       });
     } else {
-        setFormData({ 
-          titulo: '', 
-          categoria: 'Cultural', 
-          imagen: '', 
-          videoUrl: '', 
-          contenido: '' 
-        });
-        setFile(null);
+      setFormData(EMPTY_FORM);
     }
+    setImageFile(null);
+    setVideoFile(null);
   }, [postToEdit]);
 
+  // Libera la URL temporal de la vista previa
+  useEffect(() => {
+    if (!formData.imagen?.startsWith('blob:')) return;
+    const url = formData.imagen;
+    return () => URL.revokeObjectURL(url);
+  }, [formData.imagen]);
+
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  // El sanitizado completo se hace al guardar; aquí no se toca para no mover el cursor
   const handleEditorChange = (e) => {
     const contenido = e.target.value;
-    
-    // SANITIZAR EN TIEMPO REAL LO MÁS IMPORTANTE
-    let sanitized = contenido;
-    
-    // Eliminar etiquetas body/html/head inmediatamente
-    sanitized = sanitized.replace(/<\/?(body|html|head)[^>]*>/gi, '');
-    
-    // Eliminar scripts
-    sanitized = sanitized.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
-    
-    setFormData({ ...formData, contenido: sanitized });
+    setFormData(prev => ({ ...prev, contenido }));
   };
 
   const handleFileChange = (e) => {
-    if (e.target.files[0]) {
-        setFile(e.target.files[0]);
-        setFormData({ ...formData, imagen: URL.createObjectURL(e.target.files[0]) });
+    const f = e.target.files[0];
+    e.target.value = '';
+    if (!f) return;
+    if (f.size > MAX_IMAGE_MB * 1024 * 1024) {
+      onNotify(`❌ La imagen supera ${MAX_IMAGE_MB} MB`);
+      return;
     }
+    setImageFile(f);
+    setFormData(prev => ({ ...prev, imagen: URL.createObjectURL(f) }));
   };
 
   const handleVideoFileChange = (e) => {
-    if (e.target.files[0]) {
-        setFile(e.target.files[0]); 
-        setFormData({ ...formData, videoUrl: '' }); 
+    const f = e.target.files[0];
+    e.target.value = '';
+    if (!f) return;
+    if (f.size > MAX_VIDEO_MB * 1024 * 1024) {
+      onNotify(`❌ El video supera ${MAX_VIDEO_MB} MB`);
+      return;
     }
+    setVideoFile(f);
+    setFormData(prev => ({ ...prev, videoUrl: '' }));
   };
 
   const applyBlockStyle = (tag) => {
@@ -145,7 +109,7 @@ export default function BlogForm({ onPostCreated, postToEdit, onCancel, onNotify
   };
 
   const insertLink = () => {
-    if (linkUrl && savedRange) {
+    if (/^(https?:\/\/|mailto:)\S+$/i.test(linkUrl) && savedRange) {
       const selection = window.getSelection();
       selection.removeAllRanges();
       selection.addRange(savedRange);
@@ -157,36 +121,27 @@ export default function BlogForm({ onPostCreated, postToEdit, onCancel, onNotify
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // SANITIZACIÓN FINAL ANTES DE GUARDAR
+    const contenidoFinal = sanitizeHtml(formData.contenido || '');
+    if (!contenidoFinal.replace(/<[^>]+>/g, '').trim()) {
+      onNotify("❌ El contenido de la noticia está vacío");
+      return;
+    }
+
     setLoading(true);
 
     try {
-      let imageUrl = formData.imagen;
-      let videoLink = formData.videoUrl;
-
-      // 1. Subida de archivos (Imagen o Video)
-      if (file) {
-        const folder = file.type.startsWith('video/') ? 'blog_videos' : 'blog_images';
-        const storageRef = ref(storage, `${folder}/${Date.now()}_${file.name}`);
-        await uploadBytes(storageRef, file);
-        const downloadUrl = await getDownloadURL(storageRef);
-
-        if (file.type.startsWith('video/')) {
-            videoLink = downloadUrl;
-        } else {
-            imageUrl = downloadUrl;
-        }
-      }
+      // 1. Subida de archivos (imagen y/o video)
+      const [imageUrl, videoLink] = await Promise.all([
+        imageFile ? uploadFile(imageFile, 'blog_images') : formData.imagen,
+        videoFile ? uploadFile(videoFile, 'blog_videos') : formData.videoUrl,
+      ]);
       
       // 2. Preparar datos
       const user = auth.currentUser;
       const autor = user.displayName || user.email;
 
-      // SANITIZACIÓN FINAL ANTES DE GUARDAR
-      const contenidoFinal = sanitizeEditorHTML(formData.contenido || '');
-      
-      console.log("Contenido sanitizado antes de guardar (primeros 200 chars):", 
-        contenidoFinal.substring(0, 200));
-      
       // 3. Preparar datos para Firestore
       const datosFinales = {
         titulo: formData.titulo.trim(),
@@ -213,14 +168,9 @@ export default function BlogForm({ onPostCreated, postToEdit, onCancel, onNotify
       }
 
       // 5. Limpiar
-      setFormData({ 
-        titulo: '', 
-        categoria: 'Cultural', 
-        imagen: '', 
-        videoUrl: '', 
-        contenido: '' 
-      });
-      setFile(null);
+      setFormData(EMPTY_FORM);
+      setImageFile(null);
+      setVideoFile(null);
       
       if(onPostCreated) onPostCreated();
 
@@ -253,9 +203,7 @@ export default function BlogForm({ onPostCreated, postToEdit, onCancel, onNotify
               <div className="col-md-4">
                   <label className="form-label fw-bold small text-muted">SECCIÓN</label>
                   <select name="categoria" className="form-select" value={formData.categoria} onChange={handleChange}>
-                      <option value="Cultural">Cultural</option>
-                      <option value="Entretenimiento">Entretenimiento</option>
-                      <option value="Noticias">Noticias</option>
+                      {CATEGORIAS.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
                   </select>
               </div>
 
@@ -271,15 +219,16 @@ export default function BlogForm({ onPostCreated, postToEdit, onCancel, onNotify
                         disabled={loading}
                       />
                       
-                      {formData.imagen && !file?.type.startsWith('video/') ? (
+                      {formData.imagen ? (
                           <div className="position-relative d-inline-block">
                               <img src={formData.imagen} alt="Preview" className="img-fluid rounded shadow-sm" style={{maxHeight: '200px'}} />
                               <button 
                                 type="button"
                                 className="btn btn-sm btn-danger position-absolute top-0 end-0 m-1 rounded-circle"
+                                title="Cambiar imagen"
                                 onClick={() => { 
-                                  setFile(null); 
-                                  setFormData({...formData, imagen: ''});
+                                  setImageFile(null); 
+                                  setFormData(prev => ({ ...prev, imagen: '' }));
                                 }}
                               >
                                 <RefreshCw size={14}/>
@@ -287,7 +236,7 @@ export default function BlogForm({ onPostCreated, postToEdit, onCancel, onNotify
                           </div>
                       ) : (
                           <label htmlFor="imageFileInput" className="btn btn-outline-primary cursor-pointer d-flex align-items-center justify-content-center gap-2" style={{cursor: 'pointer'}}>
-                              <UploadCloud size={20} /> {file?.type.startsWith('video/') ? 'Video seleccionado en otro campo' : 'Subir Imagen desde PC'}
+                              <UploadCloud size={20} /> Subir Imagen desde PC (máx. {MAX_IMAGE_MB} MB)
                           </label>
                       )}
                   </div>
@@ -305,12 +254,17 @@ export default function BlogForm({ onPostCreated, postToEdit, onCancel, onNotify
                         placeholder="Pegar URL de YouTube..." 
                         value={formData.videoUrl} 
                         onChange={handleChange} 
-                        disabled={loading || (file && file.type.startsWith('video/'))}
+                        disabled={loading || !!videoFile}
                     />
                     
-                    <label htmlFor="videoFileInput" className={`btn ${file?.type.startsWith('video/') ? 'btn-success' : 'btn-outline-dark'} d-flex align-items-center gap-2`}>
-                        {file?.type.startsWith('video/') ? <CheckCircle size={20} /> : <UploadCloud size={20} />} 
-                        {file?.type.startsWith('video/') ? 'Video Seleccionado' : 'Subir Video'}
+                    {videoFile && (
+                        <button type="button" className="btn btn-outline-danger" title="Quitar video" onClick={() => setVideoFile(null)} disabled={loading}>
+                            <RefreshCw size={16} />
+                        </button>
+                    )}
+                    <label htmlFor="videoFileInput" className={`btn ${videoFile ? 'btn-success' : 'btn-outline-dark'} d-flex align-items-center gap-2`} title={videoFile?.name}>
+                        {videoFile ? <CheckCircle size={20} /> : <UploadCloud size={20} />} 
+                        {videoFile ? 'Video Seleccionado' : 'Subir Video'}
                     </label>
                     <input 
                         type="file" 
@@ -318,7 +272,7 @@ export default function BlogForm({ onPostCreated, postToEdit, onCancel, onNotify
                         className="d-none" 
                         accept="video/*" 
                         onChange={handleVideoFileChange} 
-                        disabled={loading || formData.videoUrl}
+                        disabled={loading || !!formData.videoUrl}
                     />
                   </div>
               </div>
@@ -333,7 +287,6 @@ export default function BlogForm({ onPostCreated, postToEdit, onCancel, onNotify
                   <div style={{border: '1px solid #ced4da', borderRadius: '0.375rem', overflow: 'hidden'}}>
                       <EditorProvider>
                         <Editor 
-                          ref={editorRef}
                           value={formData.contenido} 
                           onChange={handleEditorChange}
                           style={{minHeight: '350px', backgroundColor: 'white'}}

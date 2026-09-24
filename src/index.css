@@ -1,5 +1,3 @@
-/* Fuente moderna */
-@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;600;700&display=swap');
 
 :root {
   --primary: #0077b6;
@@ -138,4 +136,33 @@ h1, h2, h3, h4 {
 .ticker-item:hover {
   color: #0077b6; /* Azul al pasar el mouse */
   text-decoration: underline;
+}
+/* --- CONTENIDO DE LA NOTICIA --- */
+.post-content a {
+  color: var(--primary);
+  text-decoration: underline;
+  word-break: break-word;
+}
+.post-content h2, .post-content h3, .post-content h4 {
+  margin-top: 1.5rem;
+}
+.post-content blockquote {
+  border-left: 4px solid var(--secondary);
+  padding-left: 1rem;
+  color: #555;
+  font-style: italic;
+}
+
+/* Spinner del botón "Subiendo..." (usado en BlogForm) */
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Accesibilidad: sin animaciones para quien las desactiva en su sistema */
+@media (prefers-reduced-motion: reduce) {
+  .news-ticker-content, .skeleton::after, .animate-spin { animation: none; }
+  .news-card, .news-card:hover { transition: none; transform: none; }
 }

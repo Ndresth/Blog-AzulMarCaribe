@@ -3,10 +3,16 @@ import { db } from '../firebase/config';
 import { collection, getDocs, orderBy, query, limit, startAfter, where } from 'firebase/firestore';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
-// 1. Agregamos el icono Newspaper
-import { Search, Film, Drama, Globe, BookOpen, ArrowDownCircle, Newspaper } from 'lucide-react'; 
+import { Search, Globe, BookOpen, ArrowDownCircle } from 'lucide-react';
+import { CATEGORIAS, getCategoria, getBadgeClass, handleImageError, formatearFecha } from '../config/site';
+import { htmlToText } from '../utils/html';
 import PostSkeleton from '../components/PostSkeleton'; 
 import NewsTicker from '../components/NewsTicker';
+
+const CategoriaIcon = ({ categoria, size }) => {
+  const Icon = getCategoria(categoria)?.Icon;
+  return Icon ? <Icon size={size} /> : null;
+};
 
 export default function HomePage() {
   const [noticias, setNoticias] = useState([]);
@@ -98,34 +104,22 @@ export default function HomePage() {
     }
   };
 
-  const formatearFecha = (timestamp) => {
-    if (!timestamp) return "";
-    return new Date(timestamp).toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' });
-  };
+  // Búsqueda sin distinguir mayúsculas ni tildes ("musica" encuentra "Música")
+  const normalizar = (t) => (t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const termino = normalizar(busqueda.trim());
 
-  const stripHtml = (html) => {
-      let tmp = document.createElement("DIV");
-      tmp.innerHTML = html;
-      return tmp.textContent || tmp.innerText || "";
-  }
+  const noticiasFiltradas = noticias.filter((nota) => normalizar(nota.titulo).includes(termino));
 
-  const noticiasFiltradas = noticias.filter((nota) => {
-    return nota.titulo.toLowerCase().includes(busqueda.toLowerCase());
-  });
-
-  // Función para determinar el color de la etiqueta
-  const getBadgeColor = (categoria) => {
-    if (categoria === 'Cultural') return 'bg-success text-white';
-    if (categoria === 'Entretenimiento') return 'bg-warning text-dark';
-    if (categoria === 'Noticias') return 'bg-danger text-white'; // O el color que prefieras
-    return 'bg-primary text-white';
+  const resumen = (html) => {
+    const texto = htmlToText(html);
+    return texto.length > 110 ? texto.substring(0, 110).trimEnd() + '…' : texto;
   };
 
   return (
     <div>
       <Helmet>
-        <title>Azul Mar Caribe | {categoriaActual}</title>
-        <link rel="icon" type="image/png" href="/logo.png" />
+        <title>{`Azul Mar Caribe | ${categoriaActual}`}</title>
+        <meta name="description" content="Noticias culturales, entretenimiento y actualidad de la región Caribe colombiana." />
       </Helmet>
       
       <NewsTicker />
@@ -177,16 +171,11 @@ export default function HomePage() {
                 <button onClick={() => setSearchParams({})} className={`btn rounded-pill px-4 fw-bold d-flex align-items-center gap-2 ${categoriaActual === 'Todas' ? 'btn-primary' : 'btn-outline-secondary'}`}>
                     <BookOpen size={18} /> Todas
                 </button>
-                <button onClick={() => setSearchParams({ cat: 'Cultural' })} className={`btn rounded-pill px-4 fw-bold d-flex align-items-center gap-2 ${categoriaActual === 'Cultural' ? 'btn-primary' : 'btn-outline-secondary'}`}>
-                    <Drama size={18} /> Cultural
-                </button>
-                <button onClick={() => setSearchParams({ cat: 'Entretenimiento' })} className={`btn rounded-pill px-4 fw-bold d-flex align-items-center gap-2 ${categoriaActual === 'Entretenimiento' ? 'btn-primary' : 'btn-outline-secondary'}`}>
-                    <Film size={18} /> Entretenimiento
-                </button>
-                {/* 2. Nuevo botón de filtro para Noticias */}
-                <button onClick={() => setSearchParams({ cat: 'Noticias' })} className={`btn rounded-pill px-4 fw-bold d-flex align-items-center gap-2 ${categoriaActual === 'Noticias' ? 'btn-primary' : 'btn-outline-secondary'}`}>
-                    <Newspaper size={18} /> Noticias
-                </button>
+                {CATEGORIAS.map((cat) => (
+                    <button key={cat.value} onClick={() => setSearchParams({ cat: cat.value })} className={`btn rounded-pill px-4 fw-bold d-flex align-items-center gap-2 ${categoriaActual === cat.value ? 'btn-primary' : 'btn-outline-secondary'}`}>
+                        <cat.Icon size={18} /> {cat.label}
+                    </button>
+                ))}
             </div>
         </div>
       </div>
@@ -203,6 +192,9 @@ export default function HomePage() {
                 {noticiasFiltradas.length === 0 && (
                     <div className="text-center py-5">
                         <h3 className="text-muted d-flex align-items-center justify-content-center gap-2"><Search size={32} /> No encontramos noticias</h3>
+                        {termino && hayMas && (
+                            <p className="text-muted mt-2">La búsqueda solo revisa las noticias cargadas. Prueba con "Cargar más noticias".</p>
+                        )}
                     </div>
                 )}
 
@@ -213,15 +205,13 @@ export default function HomePage() {
                         <div style={{height: '220px', overflow: 'hidden', position: 'relative'}}>
                         <img 
                             src={nota.imagen} 
-                            alt="Portada" 
+                            alt={nota.titulo}
+                            loading="lazy"
                             style={{height: '100%', width: '100%', objectFit: 'cover'}}
-                            onError={(e) => e.target.src = "https://via.placeholder.com/400?text=Azul+Mar+Caribe"}
+                            onError={handleImageError}
                         />
-                        {/* 3. Lógica dinámica para los colores y los iconos de la etiqueta */}
-                        <span className={`position-absolute top-0 end-0 m-3 badge rounded-pill px-3 py-2 shadow d-flex align-items-center gap-1 ${getBadgeColor(nota.categoria)}`}>
-                            {nota.categoria === 'Cultural' && <Drama size={14} />}
-                            {nota.categoria === 'Entretenimiento' && <Film size={14} />}
-                            {nota.categoria === 'Noticias' && <Newspaper size={14} />}
+                        <span className={`position-absolute top-0 end-0 m-3 badge rounded-pill px-3 py-2 shadow d-flex align-items-center gap-1 ${getBadgeClass(nota.categoria)}`}>
+                            <CategoriaIcon categoria={nota.categoria} size={14} />
                             {nota.categoria}
                         </span>
                         </div>
@@ -234,7 +224,7 @@ export default function HomePage() {
                             {nota.titulo}
                         </h4>
                         <p className="card-text text-secondary flex-grow-1" style={{fontSize:'0.95rem'}}>
-                            {stripHtml(nota.contenido).substring(0, 100)}...
+                            {resumen(nota.contenido)}
                         </p>
                         
                         <Link to={`/post/${nota.id}`} className="btn btn-outline-primary mt-3 text-center text-decoration-none rounded-pill fw-bold">
@@ -247,7 +237,7 @@ export default function HomePage() {
                 </div>
 
                 {/* BOTÓN CARGAR MÁS */}
-                {hayMas && noticiasFiltradas.length > 0 && (
+                {hayMas && noticias.length > 0 && (
                     <div className="text-center mt-5">
                         <button 
                             onClick={cargarMasNoticias} 

@@ -14,7 +14,7 @@ export default function Navbar() {
           
           {/* Tu imagen de logo */}
           <div className="bg-white rounded-pill px-2 py-1 shadow-sm d-flex align-items-center">
-             <img src="/logo.png" alt="Logo" height="45" />
+             <img src="/logo-sm.png" alt="Azul Mar Caribe" height="45" />
           </div>
 
           {/* Texto con Ícono de Lucide */}

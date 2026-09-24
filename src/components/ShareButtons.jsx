@@ -1,9 +1,7 @@
 import React from 'react';
 import { Facebook, Twitter, MessageCircle } from 'lucide-react'; // Íconos
 
-export default function ShareButtons({ title }) {
-  // Obtenemos la URL actual de la noticia
-  const url = window.location.href;
+export default function ShareButtons({ title, url = window.location.href }) {
   
   // Codificamos el texto para que sirva en enlaces
   const encodedUrl = encodeURIComponent(url);
@@ -16,7 +14,7 @@ export default function ShareButtons({ title }) {
       <div className="d-flex gap-2">
         {/* WHATSAPP */}
         <a 
-            href={`https://api.whatsapp.com/send?text=${encodedTitle} ${encodedUrl}`} 
+            href={`https://api.whatsapp.com/send?text=${encodedTitle}%20${encodedUrl}`} 
             target="_blank" 
             rel="noopener noreferrer"
             className="btn btn-success d-flex align-items-center gap-2 rounded-pill btn-sm fw-bold"
