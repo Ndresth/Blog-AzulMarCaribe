@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { onAuthStateChanged, signOut } from 'firebase/auth'; 
 // IMPORTANTE: Importamos doc y getDoc para buscar el perfil
 import { doc, getDoc } from 'firebase/firestore';
@@ -11,7 +11,6 @@ import PrivacyPage from './pages/PrivacyPage';
 
 // Páginas
 import HomePage from './pages/HomePage';
-import LoginPage from './pages/LoginPage';
 import PostDetail from './pages/PostDetail';
 import NotFoundPage from './pages/NotFoundPage';
 import Navbar from './components/Navbar';
@@ -21,6 +20,10 @@ import ScrollToTop from './components/ScrollToTop';
 // Carga diferida: el panel y el editor solo se descargan cuando un admin los abre
 const AdminPanel = lazy(() => import('./pages/AdminPanel'));
 const CreateProfile = lazy(() => import('./pages/CreateProfile'));
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+
+// Estas rutas tienen su propio diseño, sin la cabecera ni el pie del sitio público
+const RUTAS_SIN_LAYOUT = ['/admin', '/login', '/create-profile'];
 
 const Spinner = () => (
   <div className="d-flex justify-content-center align-items-center vh-100"><div className="spinner-border text-primary"></div></div>
@@ -78,17 +81,23 @@ const ProtectedRoute = ({ children, requireProfile = true }) => {
   if (status === 'no_profile') return <Navigate to="/create-profile" />;
 
   if (status === 'unauthorized') {
+    const salir = async (destino) => { await signOut(auth); window.location.href = destino; };
     return (
-      <div className="container d-flex flex-column align-items-center justify-content-center" style={{minHeight: '70vh'}}>
-        <ShieldAlert size={80} className="text-danger mb-4" strokeWidth={1.5} />
-        <h2 className="fw-bold text-dark mb-3">Acceso Restringido</h2>
-        <div className="alert alert-warning text-center shadow-sm" style={{maxWidth: '500px'}}>
-          La cuenta <strong>{currentUser?.email}</strong> no tiene permisos.
-        </div>
-        <div className="mt-4">
-            <button onClick={async () => { await signOut(auth); window.location.href = "/"; }} className="btn btn-primary rounded-pill px-4 d-flex align-items-center gap-2 fw-bold">
-                <Home size={18} /> Volver al Inicio
+      <div className="min-vh-100 d-flex align-items-center justify-content-center p-3" style={{ background: 'var(--navy)' }}>
+        <div className="bg-white rounded-4 shadow p-4 p-md-5 text-center" style={{ maxWidth: 440 }}>
+          <span className="d-inline-flex align-items-center justify-content-center rounded-4 mb-3" style={{ width: 56, height: 56, background: '#fef2f2', color: '#dc2626' }}>
+            <ShieldAlert size={28} />
+          </span>
+          <h1 className="h4 fw-bold mb-2">Acceso restringido</h1>
+          <p className="text-secondary mb-4">
+            La cuenta <strong className="text-dark">{currentUser?.email}</strong> no tiene permisos de administración.
+          </p>
+          <div className="d-flex flex-column gap-2">
+            <button onClick={() => salir('/login')} className="btn btn-primary rounded-pill fw-semibold">Usar otra cuenta</button>
+            <button onClick={() => salir('/')} className="btn btn-light border rounded-pill d-inline-flex align-items-center justify-content-center gap-2">
+              <Home size={17} /> Volver al sitio
             </button>
+          </div>
         </div>
       </div>
     );
@@ -97,21 +106,32 @@ const ProtectedRoute = ({ children, requireProfile = true }) => {
   return children;
 };
 
+function Layout({ children }) {
+  const { pathname } = useLocation();
+  const sinLayout = RUTAS_SIN_LAYOUT.some((r) => pathname.startsWith(r));
+  if (sinLayout) return children;
+  return (
+    <div className="d-flex flex-column min-vh-100">
+      <Navbar />
+      <div className="flex-grow-1">{children}</div>
+      <Footer />
+    </div>
+  );
+}
+
 function App() {
   return (
     <BrowserRouter>
       <ScrollToTop />
-      <div className="d-flex flex-column min-vh-100">
-        <Navbar /> 
-        <div className="flex-grow-1">
-          <Suspense fallback={<Spinner />}>
+      <Layout>
+        <Suspense fallback={<Spinner />}>
           <Routes>
             <Route path="/" element={<HomePage />} />
             <Route path="/post/:id" element={<PostDetail />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/about" element={<AboutPage />} />
             <Route path="/privacy" element={<PrivacyPage />} />
-            
+
             {/* RUTA PARA CREAR PERFIL */}
             <Route path="/create-profile" element={
               <ProtectedRoute requireProfile={false}>
@@ -127,10 +147,8 @@ function App() {
 
             <Route path="*" element={<NotFoundPage />} />
           </Routes>
-          </Suspense>
-        </div>
-        <Footer />
-      </div>
+        </Suspense>
+      </Layout>
     </BrowserRouter>
   );
 }
