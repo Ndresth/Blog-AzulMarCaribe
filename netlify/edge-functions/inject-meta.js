@@ -1,5 +1,5 @@
-const PROJECT_ID = "blog-cultural-app";
-const SITE_URL = "https://blog-azulmarcaribe.netlify.app";
+import { getPost, toPlainText, SITE_URL } from "../shared/firestore.js";
+
 const DEFAULT_IMAGE = `${SITE_URL}/logo.png`;
 
 // Escapa texto para usarlo dentro de atributos/etiquetas HTML
@@ -11,17 +11,8 @@ const escapeHtml = (str) =>
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 
-const decodeEntities = (str) =>
-  str
-    .replace(/&nbsp;/g, " ")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&amp;/g, "&");
-
-const toPlainText = (html) =>
-  decodeEntities(String(html).replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").trim();
+// JSON seguro dentro de <script>: evita que "</script>" o "<!--" cierren la etiqueta
+const safeJson = (obj) => JSON.stringify(obj).replace(/</g, "\\u003c");
 
 export default async (request, context) => {
   const url = new URL(request.url);
@@ -31,24 +22,39 @@ export default async (request, context) => {
   if (!match) return context.next();
   const postId = match[1];
 
-  const apiUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/posts/${postId}`;
-
   try {
-    const response = await fetch(apiUrl);
-    if (!response.ok) return context.next();
+    const post = await getPost(postId);
+    if (!post) return context.next();
 
-    const data = await response.json();
-    if (!data?.fields) return context.next();
-
-    const titulo = escapeHtml(toPlainText(data.fields.titulo?.stringValue || "Azul Mar Caribe"));
-
-    let desc = toPlainText(data.fields.contenido?.stringValue || "Noticias culturales del Caribe.");
+    const tituloTexto = toPlainText(post.titulo || "Azul Mar Caribe");
+    let desc = toPlainText(post.contenido) || `${tituloTexto} - Azul Mar Caribe`;
     if (desc.length > 160) desc = desc.substring(0, 157).trimEnd() + "...";
-    const descripcion = escapeHtml(desc);
 
-    const rawImage = data.fields.imagen?.stringValue || "";
-    const imagen = escapeHtml(/^https:\/\//i.test(rawImage) ? rawImage : DEFAULT_IMAGE);
-    const canonical = escapeHtml(`${SITE_URL}/post/${postId}`);
+    const imagenUrl = /^https:\/\//i.test(post.imagen || "") ? post.imagen : DEFAULT_IMAGE;
+    const canonicalUrl = `${SITE_URL}/post/${postId}`;
+    const fechaIso = post.fecha ? new Date(post.fecha).toISOString() : undefined;
+
+    const titulo = escapeHtml(tituloTexto);
+    const descripcion = escapeHtml(desc);
+    const imagen = escapeHtml(imagenUrl);
+    const canonical = escapeHtml(canonicalUrl);
+
+    const jsonLd = {
+      "@context": "https://schema.org",
+      "@type": "NewsArticle",
+      headline: tituloTexto.substring(0, 110),
+      description: desc,
+      image: [imagenUrl],
+      datePublished: fechaIso,
+      articleSection: post.categoria,
+      author: [{ "@type": "Person", name: post.autor || "Redacción" }],
+      publisher: {
+        "@type": "Organization",
+        name: "Azul Mar Caribe",
+        logo: { "@type": "ImageObject", url: DEFAULT_IMAGE },
+      },
+      mainEntityOfPage: canonicalUrl,
+    };
 
     const originalResponse = await context.next();
     const page = await originalResponse.text();
@@ -60,12 +66,15 @@ export default async (request, context) => {
       `<meta property="og:description" content="${descripcion}" />`,
       `<meta property="og:image" content="${imagen}" />`,
       `<meta property="og:url" content="${canonical}" />`,
+      fechaIso ? `<meta property="article:published_time" content="${fechaIso}" />` : "",
+      post.categoria ? `<meta property="article:section" content="${escapeHtml(post.categoria)}" />` : "",
       `<meta name="twitter:card" content="summary_large_image" />`,
       `<meta name="twitter:title" content="${titulo}" />`,
       `<meta name="twitter:description" content="${descripcion}" />`,
       `<meta name="twitter:image" content="${imagen}" />`,
       `<link rel="canonical" href="${canonical}" />`,
-    ].join("\n    ");
+      `<script type="application/ld+json">${safeJson(jsonLd)}</script>`,
+    ].filter(Boolean).join("\n    ");
 
     // Quitamos las meta genéricas del index.html y ponemos las de la noticia
     const updatedPage = page

@@ -10,6 +10,7 @@ import {
   CalendarDays, Plus, Inbox, RefreshCw
 } from 'lucide-react';
 import BlogForm from '../components/BlogForm';
+import { eliminarNoticiaCompleta } from '../utils/firebaseAdmin';
 import { CategoryLabel } from '../components/PostCard';
 import { CATEGORIAS, handleImageError, formatearFechaCorta, tiempoRelativo, iniciales, FALLBACK_IMAGE } from '../config/site';
 import './admin.css';
@@ -371,9 +372,15 @@ export default function AdminPanel() {
     setDeleting(true);
     try {
       if (confirm.type === 'post') {
-        await deleteDoc(doc(db, "posts", confirm.item.id));
+        const r = await eliminarNoticiaCompleta(confirm.item);
         setPosts((prev) => prev.filter((p) => p.id !== confirm.item.id));
-        showToast('Noticia eliminada');
+        const extra = [
+          r.comentarios && `${r.comentarios} comentario${r.comentarios === 1 ? '' : 's'}`,
+          r.likes && `${r.likes} me gusta`,
+          r.archivos && `${r.archivos} archivo${r.archivos === 1 ? '' : 's'}`,
+        ].filter(Boolean).join(', ');
+        showToast(extra ? `Noticia eliminada (con ${extra})` : 'Noticia eliminada');
+        if (r.pendientes) showToast('La noticia se eliminó, pero sus comentarios/likes no (publica las nuevas reglas de Firestore).', 'error');
       } else {
         await deleteDoc(doc(db, "posts", commentsPost.id, "comments", confirm.item.id));
         setCommentsList((prev) => prev.filter((c) => c.id !== confirm.item.id));
@@ -517,7 +524,7 @@ export default function AdminPanel() {
         <ConfirmModal
           title={confirm.type === 'post' ? '¿Eliminar esta noticia?' : '¿Eliminar este comentario?'}
           message={confirm.type === 'post'
-            ? `“${confirm.item.titulo}” dejará de estar publicada. Esta acción no se puede deshacer.`
+            ? `Se borrará “${confirm.item.titulo}” junto con sus comentarios, sus “Me gusta” y su portada/video subidos. Esta acción no se puede deshacer.`
             : 'El comentario se borrará definitivamente.'}
           onConfirm={executeDelete}
           onCancel={() => !deleting && setConfirm(null)}

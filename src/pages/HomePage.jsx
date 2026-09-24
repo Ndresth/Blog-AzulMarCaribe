@@ -30,7 +30,7 @@ function HeroDestacada({ post }) {
       <div className="hero-body">
         <CategoryLabel categoria={post.categoria} chip />
         <h2>{post.titulo}</h2>
-        <p className="d-none d-md-block">{resumen(post.contenido, 200)}</p>
+        {resumen(post.contenido, 200) && <p className="d-none d-md-block">{resumen(post.contenido, 200)}</p>}
         <PostMeta post={post} />
       </div>
     </Link>
