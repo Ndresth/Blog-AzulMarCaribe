@@ -7,9 +7,10 @@ import { Helmet } from 'react-helmet-async';
 import {
   LayoutDashboard, Newspaper, PenSquare, ExternalLink, LogOut, MessageSquare,
   Trash2, Pencil, X, CheckCircle2, AlertTriangle, Search, Heart, FileText,
-  CalendarDays, Plus, Inbox, RefreshCw
+  CalendarDays, Plus, Inbox, RefreshCw, Megaphone
 } from 'lucide-react';
 import BlogForm from '../components/BlogForm';
+import PautaManager from '../components/PautaManager';
 import { eliminarNoticiaCompleta } from '../utils/firebaseAdmin';
 import { CategoryLabel } from '../components/PostCard';
 import { CATEGORIAS, handleImageError, formatearFechaCorta, tiempoRelativo, iniciales, FALLBACK_IMAGE } from '../config/site';
@@ -405,6 +406,7 @@ export default function AdminPanel() {
     { id: 'dashboard', label: 'Resumen', Icon: LayoutDashboard },
     { id: 'list', label: 'Noticias', Icon: Newspaper, count: posts.length },
     { id: 'editor', label: editingPost ? 'Editando' : 'Nueva noticia', Icon: PenSquare },
+    { id: 'pauta', label: 'Pauta', Icon: Megaphone },
   ];
 
   const renderNav = () => navItems.map((item) => (
@@ -420,6 +422,7 @@ export default function AdminPanel() {
   ));
 
   const heads = {
+    pauta: { title: 'Pauta publicitaria', sub: 'Imagen que aparece al entrar al sitio. El visitante la cierra con la X.' },
     dashboard: { title: `Hola, ${(user?.displayName || 'Admin').split(' ')[0]}`, sub: 'Así va Azul Mar Caribe.' },
     list: { title: 'Noticias', sub: 'Busca, edita, modera comentarios o elimina publicaciones.' },
     editor: { title: editingPost ? 'Editar noticia' : 'Nueva noticia', sub: editingPost ? `Publicada ${tiempoRelativo(editingPost.fecha)} por ${editingPost.autor || 'Redacción'}` : 'Escribe, elige la sección y añade una portada.' },
@@ -469,7 +472,7 @@ export default function AdminPanel() {
             <h1>{heads[view].title}</h1>
             <p>{heads[view].sub}</p>
           </div>
-          {view !== 'editor' && (
+          {(view === 'dashboard' || view === 'list') && (
             <div className="d-flex gap-2">
               <button className="btn btn-light border rounded-pill d-inline-flex align-items-center gap-2" onClick={fetchPosts} disabled={loadingPosts} title="Recargar">
                 <RefreshCw size={16} className={loadingPosts ? 'animate-spin' : ''} />
@@ -497,6 +500,8 @@ export default function AdminPanel() {
             onNew={handleNewPost}
           />
         )}
+
+        {view === 'pauta' && <PautaManager onNotify={showToast} />}
 
         {view === 'editor' && (
           <BlogForm

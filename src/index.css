@@ -793,3 +793,70 @@ img.img-fallback,
   }
   .news-ticker-content { animation: none; }
 }
+
+/* ---------------- PAUTA (publicidad al entrar) ---------------- */
+.pauta-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  background: rgba(8, 20, 38, .72);
+  backdrop-filter: blur(3px);
+  animation: pautaFade .25s ease;
+}
+.pauta-box {
+  position: relative;
+  max-width: min(560px, 100%);
+  max-height: calc(100vh - 2.5rem);
+  animation: pautaIn .3s cubic-bezier(.2, .7, .2, 1);
+}
+.pauta-box img {
+  display: block;
+  max-width: 100%;
+  max-height: calc(100vh - 2.5rem);
+  width: auto;
+  height: auto;
+  border-radius: var(--radius);
+  box-shadow: 0 30px 60px -15px rgba(0, 0, 0, .6);
+  background: #fff;
+}
+.pauta-close {
+  position: absolute;
+  top: -14px;
+  right: -14px;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 0;
+  background: #fff;
+  color: var(--ink);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .35);
+  z-index: 2;
+  transition: transform .15s;
+}
+.pauta-close:hover { transform: scale(1.08); }
+.pauta-tag {
+  position: absolute;
+  left: .6rem;
+  bottom: .6rem;
+  font-size: .65rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: #fff;
+  background: rgba(15, 23, 42, .6);
+  padding: .2rem .5rem;
+  border-radius: 6px;
+  pointer-events: none;
+}
+@media (max-width: 575.98px) {
+  .pauta-close { top: 8px; right: 8px; }
+}
+@keyframes pautaFade { from { opacity: 0; } }
+@keyframes pautaIn { from { transform: translateY(16px) scale(.97); opacity: 0; } }

@@ -44,7 +44,8 @@ Las reglas viven en `firestore.rules` y `storage.rules`. Resumen:
 - **Noticias:** lectura pública; crear/editar/borrar solo admins (correo verificado de la lista).
 - **Me gusta:** un like por usuario; el contador solo puede cambiar ±1 en la misma operación que crea/borra el like.
 - **Comentarios:** cualquier usuario con sesión, máx. 1000 caracteres, sin email; los borra el admin o su autor.
-- **Storage:** lectura pública; solo admins suben a `blog_images/` (imágenes < 5 MB) y `blog_videos/` (videos < 100 MB).
+- **Pauta (`config/pauta`):** lectura pública; solo admins la crean, editan o borran (enlace vacío o `http(s)://`).
+- **Storage:** lectura pública; solo admins suben a `blog_images/` y `blog_pautas/` (imágenes < 5 MB) y `blog_videos/` (videos < 100 MB).
 
 Probarlas (requiere Java):
 
@@ -56,6 +57,10 @@ Publicarlas (una de dos):
 
 1. **Consola:** Firebase Console → Firestore Database → Reglas → pegar `firestore.rules` → Publicar. Igual en Storage → Reglas con `storage.rules`.
 2. **CLI:** `npx firebase-tools login` y luego `npx firebase-tools deploy --only firestore:rules,storage`.
+
+## Pauta publicitaria
+
+Desde **Panel admin → Pauta** se sube una imagen (y opcionalmente un enlace). Aparece en una ventana al entrar al sitio, una vez por visita, y se cierra con la X o Esc. Si se sube una pauta nueva, vuelve a mostrarse a todos. Para pausarla, desactivar el interruptor y guardar.
 
 ## SEO
 
