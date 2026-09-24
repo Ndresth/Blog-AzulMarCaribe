@@ -9,9 +9,24 @@ import {
 import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from 'firebase/auth';
 import { Helmet } from 'react-helmet-async';
 import ShareButtons from '../components/ShareButtons';
-import { ArrowLeft, MessageSquare, Send, User, Trash2, Calendar, Sparkles, Heart, LogIn, Video } from 'lucide-react';
-import { isAdminEmail, getBadgeClass, handleImageError, formatearFecha, SITE_URL, FALLBACK_IMAGE } from '../config/site';
-import { sanitizeHtml, htmlToText, getYouTubeEmbedUrl } from '../utils/html';
+import PostCard from '../components/PostCard';
+import { ChevronRight, MessageSquare, Send, Trash2, Heart, LogIn, Clock, Compass } from 'lucide-react';
+import { isAdminEmail, getCategoriaColor, handleImageError, formatearFecha, tiempoRelativo, iniciales, SITE_URL, FALLBACK_IMAGE } from '../config/site';
+import { sanitizeHtml, htmlToText, getYouTubeEmbedUrl, tiempoLectura } from '../utils/html';
+
+// Barra fina que indica cuánto del artículo se ha leído
+function ReadingProgress() {
+  const [progress, setProgress] = useState(0);
+  useEffect(() => {
+    const onScroll = () => {
+      const max = document.documentElement.scrollHeight - window.innerHeight;
+      setProgress(max > 0 ? Math.min(100, (window.scrollY / max) * 100) : 0);
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+  return <div className="reading-progress" style={{ width: `${progress}%` }} aria-hidden="true" />;
+}
 
 const MAX_COMENTARIO = 1000;
 
@@ -143,21 +158,44 @@ export default function PostDetail() {
     }
   }
 
-  if (loading) return <div className="container py-5 text-center"><div className="spinner-border text-primary"></div></div>;
-  if (!post) return <div className="container py-5 text-center"><h3>Noticia no encontrada</h3><Link to="/">Volver</Link></div>;
+  if (loading) {
+    return (
+      <div className="container py-5" aria-busy="true">
+        <div className="article-header">
+          <div className="skeleton mb-3" style={{ height: 14, width: 120 }}></div>
+          <div className="skeleton mb-2" style={{ height: 44, width: '95%' }}></div>
+          <div className="skeleton mb-4" style={{ height: 44, width: '70%' }}></div>
+          <div className="skeleton mb-5" style={{ height: 44, width: 260, borderRadius: 999 }}></div>
+        </div>
+        <div className="article-figure skeleton" style={{ aspectRatio: '16 / 8' }}></div>
+      </div>
+    );
+  }
 
-  // APLICAMOS LA LIMPIEZA PARA SEO
+  if (!post) {
+    return (
+      <div className="container py-5 my-5 text-center">
+        <Compass size={56} strokeWidth={1.5} className="text-primary mb-3" />
+        <h1 className="h3 font-serif">No encontramos esta noticia</h1>
+        <p className="text-secondary mb-4">Puede que haya sido eliminada o que el enlace esté incompleto.</p>
+        <Link to="/" className="btn btn-primary rounded-pill px-4">Ir a la portada</Link>
+      </div>
+    );
+  }
+
   const seoTitle = htmlToText(post.titulo);
   const seoDesc = htmlToText(post.contenido).substring(0, 160);
   const seoImage = post.imagen || `${SITE_URL}${FALLBACK_IMAGE}`;
   const canonicalUrl = `${SITE_URL}/post/${id}`;
   const youtubeEmbed = post.videoUrl ? getYouTubeEmbedUrl(post.videoUrl) : null;
+  const autor = post.autor || 'Redacción';
 
   return (
-    <div className="container py-5" style={{maxWidth: '900px'}}>
-      
+    <main id="contenido">
+      <ReadingProgress />
+
       <Helmet>
-        <title>{seoTitle} | Azul Mar Caribe</title>
+        <title>{`${seoTitle} | Azul Mar Caribe`}</title>
         <meta name="description" content={seoDesc} />
         <meta property="og:type" content="article" />
         <meta property="og:title" content={seoTitle} />
@@ -168,143 +206,174 @@ export default function PostDetail() {
         <meta name="twitter:card" content="summary_large_image" />
       </Helmet>
 
-      <Link to="/" className="btn btn-light mb-4 shadow-sm fw-bold text-primary px-4 rounded-pill d-inline-flex align-items-center gap-2">
-        <ArrowLeft size={18} /> Volver al Inicio
-      </Link>
-
-      <article className="mb-5 bg-white p-4 p-md-5 rounded-4 shadow-sm border-0">
-        <div className="d-flex justify-content-between align-items-center mb-3">
-            <span className={`badge fs-6 px-3 py-2 rounded-pill ${getBadgeClass(post.categoria)}`}>
+      <article>
+        {/* ENCABEZADO */}
+        <header className="container pt-4 pt-lg-5">
+          <div className="article-header">
+            <nav className="breadcrumb-lite mb-4" aria-label="Ruta">
+              <Link to="/">Portada</Link>
+              <ChevronRight size={14} />
+              <Link to={`/?cat=${encodeURIComponent(post.categoria || '')}`} style={{ color: getCategoriaColor(post.categoria) }} className="fw-semibold">
                 {post.categoria}
-            </span>
-            <small className="text-muted d-flex align-items-center gap-1"><Calendar size={14} /> {formatearFecha(post.fecha)}</small>
-        </div>
-        
-        <h1 className="fw-bold mb-4 display-5 text-dark">{post.titulo}</h1>
-        <div className="d-flex align-items-center gap-2 mb-4 text-muted">
-            <div className="bg-light rounded-circle p-2"><User size={18} /></div>
-            <span className="small fw-bold">Por: {post.autor || "Redacción"}</span>
-        </div>
-        
-        {post.imagen && <img src={post.imagen} className="img-fluid rounded-4 shadow-sm mb-4 w-100" style={{maxHeight:'500px', objectFit:'cover'}} alt={post.titulo} onError={handleImageError} />}
-        
-        {/* CONTENIDO YA SANITIZADO */}
-        <div 
-          className="post-content"
-          style={{lineHeight: '1.9', fontSize: '1.15rem', color: '#333'}} 
-          dangerouslySetInnerHTML={{ __html: post.contenido || '' }}
-        />
+              </Link>
+            </nav>
 
-        {/* VIDEO - CON LLAVE ÚNICA */}
-        {post.videoUrl && (
-            <div className="mt-5 pt-4 border-top" key={`video-section-${id}`}>
-                <h5 className="fw-bold text-dark mb-3 d-flex align-items-center gap-2">
-                    <Video size={20} /> Video Relacionado
-                </h5>
-                <div className="ratio ratio-16x9 rounded-4 overflow-hidden shadow" style={{background:'#000'}}>
-                    {youtubeEmbed ? (
-                        <iframe 
-                            src={youtubeEmbed} 
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-                            allowFullScreen
-                            title={`Video: ${post.titulo}`}
-                            className="w-100 h-100"
-                            key={`video-${id}`}
-                            loading="lazy"
-                        />
-                    ) : (
-                        <video controls className="w-100 h-100" key={`video-local-${id}`}>
-                            <source src={post.videoUrl} />
-                            Tu navegador no soporta la reproducción de video.
-                        </video>
-                    )}
+            <h1 className="article-title mb-4">{post.titulo}</h1>
+
+            <div className="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-3 pb-4 mb-4 border-bottom">
+              <div className="d-flex align-items-center gap-3">
+                <span className="author-avatar" aria-hidden="true">{iniciales(autor)}</span>
+                <div>
+                  <div className="fw-semibold text-dark">Por {autor}</div>
+                  <div className="post-meta">
+                    <time dateTime={post.fecha ? new Date(post.fecha).toISOString() : undefined}>{formatearFecha(post.fecha)}</time>
+                    <span className="sep" />
+                    <span className="d-inline-flex align-items-center gap-1"><Clock size={13} /> {tiempoLectura(post.contenido)} min de lectura</span>
+                  </div>
                 </div>
+              </div>
+              <ShareButtons title={seoTitle} url={canonicalUrl} />
             </div>
+          </div>
+        </header>
+
+        {post.imagen && (
+          <figure className="article-figure container mb-5">
+            <img src={post.imagen} alt={seoTitle} onError={handleImageError} fetchPriority="high" />
+          </figure>
         )}
 
-        {/* LIKES Y COMPARTIR */}
-        <div className="mt-5 d-flex flex-column flex-md-row gap-3 align-items-center justify-content-between border-top pt-4">
-            <button 
-                onClick={handleLike}
-                className={`btn rounded-pill px-4 py-2 fw-bold d-flex align-items-center gap-2 transition-all ${hasLiked ? 'btn-danger' : 'btn-outline-danger'}`}
-            >
-                <Heart size={20} fill={hasLiked ? "currentColor" : "none"} />
-                {hasLiked ? 'Te gusta' : 'Me gusta'} 
-                <span className="badge bg-white text-danger ms-1 rounded-pill border border-danger">{likes}</span>
+        {/* CONTENIDO YA SANITIZADO */}
+        <div className="container">
+          <div className="post-content" dangerouslySetInnerHTML={{ __html: post.contenido || '' }} />
+
+          {post.videoUrl && (
+            <div className="article-narrow mt-5" key={`video-section-${id}`}>
+              <h2 className="section-title"><span className="bar" /> Video</h2>
+              <div className="ratio ratio-16x9 video-frame">
+                {youtubeEmbed ? (
+                  <iframe
+                    src={youtubeEmbed}
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                    title={`Video: ${seoTitle}`}
+                    loading="lazy"
+                  />
+                ) : (
+                  <video controls preload="metadata">
+                    <source src={post.videoUrl} />
+                    Tu navegador no soporta la reproducción de video.
+                  </video>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* LIKES Y COMPARTIR */}
+          <div className="article-narrow d-flex flex-column flex-sm-row gap-3 align-items-sm-center justify-content-between border-top border-bottom py-4 my-5">
+            <button onClick={handleLike} className={`like-btn${hasLiked ? ' liked' : ''}`} aria-pressed={hasLiked}>
+              <Heart size={19} fill={hasLiked ? 'currentColor' : 'none'} />
+              {hasLiked ? 'Te gusta' : 'Me gusta'}
+              <span className="count">{likes}</span>
             </button>
-            <div className="w-100 w-md-auto"><ShareButtons title={seoTitle} url={canonicalUrl} /></div>
+            <div className="d-flex align-items-center gap-3">
+              <span className="small text-secondary fw-semibold">Compartir</span>
+              <ShareButtons title={seoTitle} url={canonicalUrl} />
+            </div>
+          </div>
         </div>
       </article>
 
-      {/* RELACIONADAS */}
-      {relacionadas.length > 0 && (
-        <section className="mb-5">
-            <h4 className="fw-bold mb-4 d-flex align-items-center gap-2 text-dark">
-              <Sparkles className="text-warning" fill="orange" /> También te podría interesar
-            </h4>
-            <div className="row g-3">
-                {relacionadas.map(rel => (
-                    <div key={rel.id} className="col-md-4">
-                        <Link to={`/post/${rel.id}`} className="text-decoration-none text-dark">
-                            <div className="card h-100 border-0 shadow-sm hover-effect">
-                                <img src={rel.imagen} alt={rel.titulo} className="card-img-top" style={{height:'120px', objectFit:'cover'}} loading="lazy" onError={handleImageError} />
-                                <div className="card-body p-3"><h6 className="card-title fw-bold mb-0" style={{fontSize: '0.9rem'}}>{rel.titulo}</h6></div>
-                            </div>
-                        </Link>
-                    </div>
-                ))}
+      <div className="container">
+        {/* RELACIONADAS */}
+        {relacionadas.length > 0 && (
+          <section className="mb-5" aria-label="Noticias relacionadas" style={{ maxWidth: 1040, margin: '0 auto' }}>
+            <h2 className="section-title" style={{ '--cat-color': getCategoriaColor(post.categoria) }}>
+              <span className="bar" /> Más de {post.categoria}
+            </h2>
+            <div className="row g-4">
+              {relacionadas.map(rel => (
+                <div key={rel.id} className="col-md-4">
+                  <PostCard post={rel} compact />
+                </div>
+              ))}
             </div>
-        </section>
-      )}
-
-      {/* COMENTARIOS */}
-      <section className="bg-white p-4 rounded-4 shadow-sm border-0">
-        <h3 className="mb-4 fw-bold text-primary d-flex align-items-center gap-2 border-bottom pb-3">
-            <MessageSquare size={24} /> Comentarios ({comentarios.length})
-        </h3>
-
-        {currentUser ? (
-            <form onSubmit={handleSubmitComentario} className="mb-5 bg-light p-4 rounded-3 border">
-                <div className="d-flex align-items-center gap-2 mb-3">
-                    <img src={currentUser.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.displayName || 'U')}`} alt="Avatar" className="rounded-circle" width="30" height="30" referrerPolicy="no-referrer" />
-                    <span className="fw-bold text-dark">Comentando como: {currentUser.displayName}</span>
-                </div>
-                <div className="mb-3">
-                    <textarea className="form-control border-0 shadow-sm" rows="3" placeholder="¿Qué opinas?" maxLength={MAX_COMENTARIO} value={nuevoComentario} onChange={(e) => setNuevoComentario(e.target.value)}></textarea>
-                    <small className="text-muted d-block text-end mt-1">{nuevoComentario.length}/{MAX_COMENTARIO}</small>
-                </div>
-                <div className="text-end">
-                    <button type="submit" className="btn btn-primary fw-bold px-4 rounded-pill d-inline-flex align-items-center gap-2"><Send size={16} /> Publicar</button>
-                </div>
-            </form>
-        ) : (
-            <div className="text-center py-4 mb-5 bg-light rounded-3 border">
-                <p className="text-muted mb-3">Para dejar un comentario o dar Like, necesitas iniciar sesión.</p>
-                <button onClick={handleLogin} className="btn btn-dark rounded-pill px-4 d-inline-flex align-items-center gap-2">
-                    <LogIn size={20} /> Iniciar sesión con Google
-                </button>
-            </div>
+          </section>
         )}
 
-        <div className="d-flex flex-column gap-3">
-            {comentarios.map(c => (
-                <div key={c.id} className="card border-0 bg-light rounded-3 p-3">
-                    <div className="d-flex justify-content-between align-items-start">
-                        <div>
-                            <h6 className="fw-bold mb-1 text-dark d-flex align-items-center gap-2">
-                                <div className="bg-secondary rounded-circle d-flex align-items-center justify-content-center text-white" style={{width:'30px', height:'30px'}}><User size={16} /></div> {c.autor}
-                            </h6>
-                            <small className="text-muted d-block mb-2 ms-5" style={{fontSize:'0.75rem', marginTop: '-5px'}}>{formatearFecha(c.fecha)}</small>
-                            <p className="mb-0 text-secondary ms-5" style={{whiteSpace: 'pre-line', wordBreak: 'break-word'}}>{c.texto}</p>
-                        </div>
-                        {isAdmin && (
-                            <button onClick={() => handleDeleteComment(c.id)} className="btn btn-outline-danger btn-sm border-0 p-2 rounded-circle hover-bg-danger" title="Eliminar"><Trash2 size={18} /></button>
-                        )}
-                    </div>
+        {/* COMENTARIOS */}
+        <section className="comments-card article-narrow" aria-label="Comentarios" style={{ maxWidth: 760 }}>
+          <h2 className="h4 font-serif fw-bold mb-4 d-flex align-items-center gap-2">
+            <MessageSquare size={22} className="text-primary" /> Comentarios
+            <span className="badge rounded-pill text-bg-light border fw-semibold">{comentarios.length}</span>
+          </h2>
+
+          {currentUser ? (
+            <form onSubmit={handleSubmitComentario} className="comment-form mb-4">
+              <div className="d-flex gap-3">
+                <img
+                  src={currentUser.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.displayName || 'U')}`}
+                  alt=""
+                  className="rounded-circle flex-shrink-0"
+                  width="38" height="38"
+                  referrerPolicy="no-referrer"
+                />
+                <div className="flex-grow-1">
+                  <label htmlFor="comentario" className="visually-hidden">Escribe tu comentario</label>
+                  <textarea
+                    id="comentario"
+                    className="form-control"
+                    rows="3"
+                    placeholder={`Comenta como ${currentUser.displayName || 'usuario'}…`}
+                    maxLength={MAX_COMENTARIO}
+                    value={nuevoComentario}
+                    onChange={(e) => setNuevoComentario(e.target.value)}
+                  ></textarea>
+                  <div className="d-flex justify-content-between align-items-center mt-2">
+                    <small className="text-muted">{nuevoComentario.length}/{MAX_COMENTARIO}</small>
+                    <button type="submit" className="btn btn-primary btn-sm fw-semibold px-3 rounded-pill d-inline-flex align-items-center gap-2" disabled={!nuevoComentario.trim()}>
+                      <Send size={15} /> Publicar
+                    </button>
+                  </div>
                 </div>
-            ))}
-        </div>
-      </section>
-    </div>
+              </div>
+            </form>
+          ) : (
+            <div className="text-center py-4 px-3 mb-4 rounded-3" style={{ background: 'var(--bg)' }}>
+              <p className="text-secondary mb-3">Inicia sesión para comentar y dar “Me gusta”.</p>
+              <button onClick={handleLogin} className="btn btn-dark rounded-pill px-4 d-inline-flex align-items-center gap-2">
+                <LogIn size={18} /> Continuar con Google
+              </button>
+            </div>
+          )}
+
+          {comentarios.length === 0 ? (
+            <p className="text-muted text-center mb-0 pt-3 border-top">Sé el primero en comentar.</p>
+          ) : (
+            <div>
+              {comentarios.map(c => (
+                <div key={c.id} className="comment">
+                  <span className="avatar" aria-hidden="true">{iniciales(c.autor)}</span>
+                  <div className="flex-grow-1 min-w-0">
+                    <div className="d-flex justify-content-between align-items-start gap-2">
+                      <div>
+                        <span className="fw-semibold text-dark">{c.autor}</span>
+                        <span className="text-muted small ms-2">{tiempoRelativo(c.fecha)}</span>
+                      </div>
+                      {isAdmin && (
+                        <button onClick={() => handleDeleteComment(c.id)} className="btn btn-sm btn-link text-danger p-0" title="Eliminar comentario" aria-label="Eliminar comentario">
+                          <Trash2 size={16} />
+                        </button>
+                      )}
+                    </div>
+                    <p className="mb-0 mt-1 text-secondary" style={{ whiteSpace: 'pre-line', wordBreak: 'break-word' }}>{c.texto}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
+    </main>
   );
 }

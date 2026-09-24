@@ -5,6 +5,17 @@ const parse = (html) => new DOMParser().parseFromString(html || '', 'text/html')
 export const htmlToText = (html) =>
   (parse(html).body.textContent || '').replace(/\s+/g, ' ').trim();
 
+export const resumen = (html, max = 140) => {
+  const texto = htmlToText(html);
+  return texto.length > max ? texto.substring(0, max).replace(/\s+\S*$/, '') + '…' : texto;
+};
+
+// Minutos de lectura estimados (≈200 palabras por minuto)
+export const tiempoLectura = (html) => {
+  const palabras = htmlToText(html).split(' ').filter(Boolean).length;
+  return Math.max(1, Math.round(palabras / 200));
+};
+
 const ALLOWED_TAGS = new Set(['P', 'BR', 'B', 'I', 'U', 'STRONG', 'EM', 'UL', 'OL', 'LI', 'H2', 'H3', 'H4', 'A', 'BLOCKQUOTE']);
 const DROP_WITH_CONTENT = new Set(['SCRIPT', 'STYLE', 'IFRAME', 'OBJECT', 'EMBED', 'TEMPLATE', 'NOSCRIPT', 'HEAD', 'TITLE', 'META', 'LINK']);
 const SAFE_HREF = /^(https?:|mailto:)/i;

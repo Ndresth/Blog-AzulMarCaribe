@@ -30,7 +30,8 @@ VITE_MEASUREMENT_ID=
 | `src/config/site.js` | Lista de admins, categorías (color e ícono), imagen de respaldo, formato de fecha |
 | `src/utils/html.js` | Sanitizador de HTML, HTML→texto y conversión de enlaces de YouTube |
 | `src/pages/` | Páginas (inicio, detalle, panel admin, login, etc.) |
-| `src/components/` | Navbar, Footer, editor (`BlogForm`), ticker, botones de compartir |
+| `src/components/` | Navbar, Footer, `PostCard` (tarjeta de noticia), `PageHero`, editor (`BlogForm`), ticker, botones de compartir |
+| `src/index.css` | Sistema de diseño: colores, tipografía (Inter + Source Serif 4, alojadas en el sitio) y estilos de componentes |
 | `netlify/edge-functions/inject-meta.js` | Inserta título/descripción/imagen de cada noticia en el HTML para Facebook, WhatsApp y X |
 
 - **Agregar un admin:** añadir el correo (en minúsculas) a `ADMIN_EMAILS` en `src/config/site.js`. Las reglas de Firestore también deben permitirlo.

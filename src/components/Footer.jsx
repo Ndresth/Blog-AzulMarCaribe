@@ -1,85 +1,60 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-// Agregamos el ícono 'Newspaper' para la sección de Noticias
-import { Home, Drama, Film, Newspaper, Facebook, Instagram, Twitter, Youtube, Mail, Users, ShieldCheck } from 'lucide-react';
+import { Mail } from 'lucide-react';
+import { CATEGORIAS, SOCIAL_LINKS, CONTACT_EMAIL } from '../config/site';
 
 export default function Footer() {
-  
   const scrollTop = () => window.scrollTo(0, 0);
 
   return (
-    <footer style={{ backgroundColor: '#023e8a', color: 'white', marginTop: 'auto' }}>
+    <footer className="site-footer mt-5">
       <div className="container py-5">
-        <div className="row g-4">
-          
-          {/* COLUMNA 1 */}
-          <div className="col-md-4">
-            <div className="d-flex align-items-center gap-2 mb-3">
-                <img src="/logo-sm.png" alt="Azul Mar Caribe" loading="lazy" style={{height: '40px', background:'white', borderRadius:'50%', padding:'2px'}} />
-                <h5 className="mb-0 fw-bold">Azul Mar Caribe</h5>
-            </div>
-            <p className="text-white-50 small">
-              Tu portal número uno para las noticias culturales y de entretenimiento de la región Caribe. Conectando tradiciones con el mundo digital.
+        <div className="row gx-4 gy-5">
+          <div className="col-lg-5">
+            <Link to="/" onClick={scrollTop} className="footer-logo mb-3">
+              <img src="/logo-sm.png" alt="Azul Mar Caribe" loading="lazy" />
+            </Link>
+            <p className="mb-4" style={{ maxWidth: '42ch' }}>
+              Cultura, entretenimiento y actualidad de la región Caribe. Conectando nuestras tradiciones con el mundo digital.
             </p>
+            <div className="d-flex gap-2">
+              {SOCIAL_LINKS.map((s) => (
+                <a key={s.name} href={s.href} target="_blank" rel="noopener noreferrer" className="social-btn" aria-label={s.name} title={s.name}>
+                  <s.Icon size={18} />
+                </a>
+              ))}
+            </div>
           </div>
 
-          {/* COLUMNA 2 */}
-          <div className="col-md-4">
-            <h5 className="fw-bold mb-3">Secciones</h5>
-            <ul className="list-unstyled">
-              <li className="mb-2">
-                <Link to="/" onClick={scrollTop} className="text-white-50 text-decoration-none hover-white d-flex align-items-center gap-2">
-                  <Home size={16} /> Inicio
-                </Link>
-              </li>
-              <li className="mb-2">
-                <Link to="/?cat=Cultural" onClick={scrollTop} className="text-white-50 text-decoration-none hover-white d-flex align-items-center gap-2">
-                  <Drama size={16} /> Cultura
-                </Link>
-              </li>
-              <li className="mb-2">
-                <Link to="/?cat=Entretenimiento" onClick={scrollTop} className="text-white-50 text-decoration-none hover-white d-flex align-items-center gap-2">
-                  <Film size={16} /> Entretenimiento
-                </Link>
-              </li>
-              {/* 👇 AQUI ESTÁ EL NUEVO ENLACE DE NOTICIAS 👇 */}
-              <li className="mb-2">
-                <Link to="/?cat=Noticias" onClick={scrollTop} className="text-white-50 text-decoration-none hover-white d-flex align-items-center gap-2">
-                  <Newspaper size={16} /> Noticias
-                </Link>
-              </li>
-              <li className="mb-2">
-                <Link to="/about" onClick={scrollTop} className="text-white-50 text-decoration-none hover-white d-flex align-items-center gap-2">
-                  <Users size={16} /> Quiénes Somos
-                </Link>
-              </li>
-              <li className="mb-2">
-                <Link to="/privacy" onClick={scrollTop} className="text-white-50 text-decoration-none hover-white d-flex align-items-center gap-2">
-                  <ShieldCheck size={16} /> Privacidad
-                </Link>
-              </li>
+          <div className="col-sm-6 col-lg-3">
+            <h6>Secciones</h6>
+            <ul className="list-unstyled d-flex flex-column gap-2 mb-0">
+              <li><Link to="/" onClick={scrollTop}>Portada</Link></li>
+              {CATEGORIAS.map((c) => (
+                <li key={c.value}><Link to={`/?cat=${c.value}`} onClick={scrollTop}>{c.label}</Link></li>
+              ))}
             </ul>
           </div>
 
-          {/* COLUMNA 3 */}
-          <div className="col-md-4">
-            <h5 className="fw-bold mb-3">Síguenos en Redes</h5>
-            <div className="d-flex gap-3">
-              <a href="https://www.facebook.com/xiomysofy.dlosreyes" target="_blank" rel="noopener noreferrer" className="text-white" title="Facebook"><Facebook size={24} /></a>
-              <a href="https://www.instagram.com/azulmarcaribe.link" target="_blank" rel="noopener noreferrer" className="text-white" title="Instagram"><Instagram size={24} /></a>
-              <a href="https://x.com/xiomysofy" target="_blank" rel="noopener noreferrer" className="text-white" title="X (Twitter)"><Twitter size={24} /></a>
-              <a href="https://youtube.com/@zulmarcaribe" target="_blank" rel="noopener noreferrer" className="text-white" title="YouTube"><Youtube size={24} /></a>
-            </div>
-            <p className="text-white-50 small mt-3 d-flex align-items-center gap-2">
-              <Mail size={16} /> Contacto: Xiomysofy24@gmail.com
-            </p>
+          <div className="col-sm-6 col-lg-4">
+            <h6>Azul Mar Caribe</h6>
+            <ul className="list-unstyled d-flex flex-column gap-2 mb-0">
+              <li><Link to="/about" onClick={scrollTop}>Quiénes somos</Link></li>
+              <li><Link to="/privacy" onClick={scrollTop}>Política de privacidad</Link></li>
+              <li>
+                <a href={`mailto:${CONTACT_EMAIL}`} className="d-inline-flex align-items-center gap-2 text-break">
+                  <Mail size={15} /> {CONTACT_EMAIL}
+                </a>
+              </li>
+            </ul>
           </div>
         </div>
+      </div>
 
-        <hr style={{ borderColor: 'rgba(255,255,255,0.2)' }} />
-
-        <div className="text-center text-white-50 small">
-          &copy; {new Date().getFullYear()} Azul Mar Caribe. Todos los derechos reservados.
+      <div className="footer-bottom">
+        <div className="container py-3 d-flex flex-column flex-md-row justify-content-between gap-2">
+          <span>&copy; {new Date().getFullYear()} Azul Mar Caribe. Todos los derechos reservados.</span>
+          <span>Hecho con orgullo en el Caribe colombiano</span>
         </div>
       </div>
     </footer>
