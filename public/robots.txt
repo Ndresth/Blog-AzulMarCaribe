@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /login
+Disallow: /create-profile
+
+Sitemap: https://blog-azulmarcaribe.netlify.app/sitemap.xml

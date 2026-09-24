@@ -14,6 +14,8 @@ import {
 } from 'lucide-react';
 
 import PostCard from './PostCard';
+import { borrarArchivo } from '../utils/firebaseAdmin';
+import { comprimirImagen } from '../utils/imagen';
 import { CATEGORIAS } from '../config/site';
 import { sanitizeHtml, htmlToText, getYouTubeEmbedUrl } from '../utils/html';
 
@@ -73,10 +75,12 @@ export default function BlogForm({ onPostCreated, postToEdit, onCancel, onNotify
   // El sanitizado completo se hace al guardar; aquí no se toca para no mover el cursor
   const handleEditorChange = (e) => setCampo('contenido', e.target.value);
 
-  const elegirImagen = (f) => {
-    if (!f) return;
-    if (!f.type.startsWith('image/')) { onNotify('El archivo no es una imagen', 'error'); return; }
-    if (f.size > MAX_IMAGE_MB * 1024 * 1024) { onNotify(`La imagen supera ${MAX_IMAGE_MB} MB`, 'error'); return; }
+  const elegirImagen = async (original) => {
+    if (!original) return;
+    if (!original.type.startsWith('image/')) { onNotify('El archivo no es una imagen', 'error'); return; }
+    // Se optimiza antes de validar el tamaño: una foto de 8 MB suele quedar en unos cientos de KB
+    const f = await comprimirImagen(original);
+    if (f.size > MAX_IMAGE_MB * 1024 * 1024) { onNotify(`La imagen supera ${MAX_IMAGE_MB} MB incluso optimizada`, 'error'); return; }
     setImageFile(f);
     setCampo('imagen', URL.createObjectURL(f));
   };
@@ -135,7 +139,9 @@ export default function BlogForm({ onPostCreated, postToEdit, onCancel, onNotify
 
     // SANITIZACIÓN FINAL ANTES DE GUARDAR
     const contenidoFinal = sanitizeHtml(formData.contenido || '');
-    if (!htmlToText(contenidoFinal)) { onNotify('El contenido de la noticia está vacío', 'error'); return; }
+    // Se permiten publicaciones solo con imagen o video (p. ej. afiches), pero no vacías del todo
+    const tieneMedia = !!(formData.imagen || formData.videoUrl || videoFile);
+    if (!htmlToText(contenidoFinal) && !tieneMedia) { onNotify('Agrega texto, una imagen o un video a la noticia', 'error'); return; }
 
     setLoading(true);
 
@@ -172,6 +178,9 @@ export default function BlogForm({ onPostCreated, postToEdit, onCancel, onNotify
           ...datosFinales,
           autor: postToEdit.autor || user.displayName || user.email,
         });
+        // Si se reemplazó la portada o el video, se borra el archivo anterior de Storage
+        if (postToEdit.imagen && postToEdit.imagen !== imageUrl) borrarArchivo(postToEdit.imagen);
+        if (postToEdit.videoUrl && postToEdit.videoUrl !== (videoLink || '')) borrarArchivo(postToEdit.videoUrl);
         onNotify('Noticia actualizada correctamente');
       } else {
         await addDoc(collection(db, "posts"), {
@@ -329,6 +338,11 @@ export default function BlogForm({ onPostCreated, postToEdit, onCancel, onNotify
                 {formData.imagen ? (
                   <div className="cover-preview">
                     <img src={formData.imagen} alt="Vista previa de la portada" />
+                    {imageFile && (
+                      <span className="position-absolute top-0 start-0 m-2 badge rounded-pill text-bg-dark fw-semibold">
+                        {imageFile.size < 1024 * 1024 ? `${Math.round(imageFile.size / 1024)} KB` : `${(imageFile.size / 1024 / 1024).toFixed(1)} MB`}
+                      </span>
+                    )}
                     <div className="actions">
                       <label htmlFor="imageFileInput"><RefreshCw size={13} /> Cambiar</label>
                       <button type="button" onClick={quitarImagen} disabled={loading}><Trash2 size={13} /> Quitar</button>
@@ -344,7 +358,7 @@ export default function BlogForm({ onPostCreated, postToEdit, onCancel, onNotify
                   >
                     <ImagePlus size={28} className="mb-2" />
                     <div className="fw-semibold">Arrastra una imagen o haz clic</div>
-                    <small>JPG, PNG o WebP · máx. {MAX_IMAGE_MB} MB · ideal 1200×750</small>
+                    <small>JPG, PNG o WebP · se optimiza automáticamente · ideal horizontal 16:10</small>
                   </label>
                 )}
               </div>

@@ -1,0 +1,90 @@
+rules_version = '2';
+
+// Reglas de Firestore para Azul Mar Caribe.
+// Publicar: firebase deploy --only firestore:rules   (o pegar en Firebase Console > Firestore > Reglas)
+// Mantener ADMINS sincronizada con ADMIN_EMAILS en src/config/site.js (en minúsculas).
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return signedIn()
+        && request.auth.token.email_verified == true
+        && request.auth.token.email.lower() in [
+          'yamithadresjulio@gmail.com',
+          'xiomysofy24@gmail.com',
+          'delosreyesxiomara75@gmail.com',
+          'linaospina003@gmail.com'
+        ];
+    }
+
+    // ---------- NOTICIAS ----------
+    match /posts/{postId} {
+      allow read: if true;
+
+      allow create: if isAdmin()
+        && request.resource.data.titulo is string
+        && request.resource.data.titulo.size() > 0
+        && request.resource.data.titulo.size() <= 200
+        && request.resource.data.categoria in ['Cultural', 'Entretenimiento', 'Noticias']
+        && request.resource.data.contenido is string
+        && request.resource.data.fecha is number;
+
+      allow delete: if isAdmin();
+
+      // Los admins editan libremente. Un lector solo puede mover el contador de "Me gusta"
+      // en ±1, y únicamente en la misma operación en que crea/borra su propio like.
+      allow update: if isAdmin() || validLikeChange(postId);
+
+      function likePath(postId) {
+        return /databases/$(database)/documents/posts/$(postId)/likes/$(request.auth.uid);
+      }
+
+      function validLikeChange(postId) {
+        let before = resource.data.get('likes', 0);
+        let after = request.resource.data.get('likes', 0);
+        return signedIn()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes'])
+          && (
+            (after == before + 1 && !exists(likePath(postId)) && existsAfter(likePath(postId)))
+            || (after == before - 1 && exists(likePath(postId)) && !existsAfter(likePath(postId)))
+          );
+      }
+
+      // ---------- LIKES (uno por usuario) ----------
+      match /likes/{uid} {
+        allow read: if true;
+        allow create: if signedIn() && request.auth.uid == uid
+          && request.resource.data.keys().hasOnly(['uid'])
+          && request.resource.data.uid == uid;
+        allow delete: if (signedIn() && request.auth.uid == uid) || isAdmin();
+      }
+
+      // ---------- COMENTARIOS ----------
+      match /comments/{commentId} {
+        allow read: if true;
+        allow create: if signedIn()
+          && request.resource.data.keys().hasOnly(['autor', 'uid', 'texto', 'fecha'])
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.autor is string
+          && request.resource.data.autor.size() > 0
+          && request.resource.data.autor.size() <= 80
+          && request.resource.data.texto is string
+          && request.resource.data.texto.size() > 0
+          && request.resource.data.texto.size() <= 1000
+          && request.resource.data.fecha is number;
+        // Borra el admin o el propio autor del comentario
+        allow delete: if isAdmin()
+          || (signedIn() && resource.data.get('uid', '') == request.auth.uid);
+      }
+    }
+
+    // ---------- PERFILES DE AUTOR ----------
+    match /users/{uid} {
+      allow read, create, update: if isAdmin() && request.auth.uid == uid;
+    }
+  }
+}

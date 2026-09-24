@@ -2,9 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { db, auth } from '../firebase/config'; 
 import { 
-  doc, getDoc, collection, addDoc, deleteDoc, setDoc, 
-  onSnapshot, query, orderBy, where, limit, getDocs, 
-  updateDoc, increment 
+  doc, getDoc, collection, addDoc, deleteDoc,
+  onSnapshot, query, orderBy, where, limit, getDocs,
+  writeBatch, increment
 } from 'firebase/firestore';
 import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from 'firebase/auth';
 import { Helmet } from 'react-helmet-async';
@@ -42,6 +42,9 @@ export default function PostDetail() {
   const [currentUser, setCurrentUser] = useState(null);
   const [likes, setLikes] = useState(0);
   const [hasLiked, setHasLiked] = useState(false);
+  const [likePending, setLikePending] = useState(false);
+  const [errorComentario, setErrorComentario] = useState('');
+  const [enviando, setEnviando] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -113,26 +116,28 @@ export default function PostDetail() {
   }, [id]);
 
   // LIKE
+  // El like y el contador se escriben en una sola operación atómica (lo exigen las reglas)
   const handleLike = async () => {
-    if (!currentUser) return handleLogin(); 
+    if (!currentUser) return handleLogin();
+    if (likePending) return;
     const postRef = doc(db, "posts", id);
     const likeRef = doc(db, "posts", id, "likes", currentUser.uid);
+    const quitar = hasLiked;
+    setLikePending(true);
+    setLikes(prev => prev + (quitar ? -1 : 1));
+    setHasLiked(!quitar);
     try {
-        if (hasLiked) {
-            setLikes(prev => prev - 1); 
-            setHasLiked(false);
-            await deleteDoc(likeRef);
-            await updateDoc(postRef, { likes: increment(-1) });
-        } else {
-            setLikes(prev => prev + 1);
-            setHasLiked(true);
-            await setDoc(likeRef, { uid: currentUser.uid });
-            await updateDoc(postRef, { likes: increment(1) });
-        }
+      const batch = writeBatch(db);
+      if (quitar) batch.delete(likeRef);
+      else batch.set(likeRef, { uid: currentUser.uid });
+      batch.update(postRef, { likes: increment(quitar ? -1 : 1) });
+      await batch.commit();
     } catch (error) {
-        console.error("Error like:", error);
-        setLikes(prev => hasLiked ? prev + 1 : prev - 1);
-        setHasLiked(!hasLiked);
+      console.error("Error like:", error);
+      setLikes(prev => prev + (quitar ? 1 : -1));
+      setHasLiked(quitar);
+    } finally {
+      setLikePending(false);
     }
   };
 
@@ -142,14 +147,22 @@ export default function PostDetail() {
     const texto = nuevoComentario.trim().slice(0, MAX_COMENTARIO);
     if (!texto || !currentUser) return;
     try {
+      setErrorComentario('');
+      setEnviando(true);
+      // Ya no se guarda el email: los comentarios son de lectura pública
       await addDoc(collection(db, "posts", id, "comments"), {
-        autor: currentUser.displayName || "Usuario", 
-        email: currentUser.email, 
-        texto, 
+        autor: (currentUser.displayName || "Usuario").slice(0, 80),
+        uid: currentUser.uid,
+        texto,
         fecha: Date.now()
       });
       setNuevoComentario('');
-    } catch (error) { console.error("Error:", error); }
+    } catch (error) {
+      console.error("Error:", error);
+      setErrorComentario('No se pudo publicar el comentario. Intenta de nuevo.');
+    } finally {
+      setEnviando(false);
+    }
   };
 
   const handleDeleteComment = async (commentId) => {
@@ -184,7 +197,7 @@ export default function PostDetail() {
   }
 
   const seoTitle = htmlToText(post.titulo);
-  const seoDesc = htmlToText(post.contenido).substring(0, 160);
+  const seoDesc = htmlToText(post.contenido).substring(0, 160) || `${seoTitle} - Azul Mar Caribe`;
   const seoImage = post.imagen || `${SITE_URL}${FALLBACK_IMAGE}`;
   const canonicalUrl = `${SITE_URL}/post/${id}`;
   const youtubeEmbed = post.videoUrl ? getYouTubeEmbedUrl(post.videoUrl) : null;
@@ -271,7 +284,7 @@ export default function PostDetail() {
 
           {/* LIKES Y COMPARTIR */}
           <div className="article-narrow d-flex flex-column flex-sm-row gap-3 align-items-sm-center justify-content-between border-top border-bottom py-4 my-5">
-            <button onClick={handleLike} className={`like-btn${hasLiked ? ' liked' : ''}`} aria-pressed={hasLiked}>
+            <button onClick={handleLike} className={`like-btn${hasLiked ? ' liked' : ''}`} aria-pressed={hasLiked} disabled={likePending}>
               <Heart size={19} fill={hasLiked ? 'currentColor' : 'none'} />
               {hasLiked ? 'Te gusta' : 'Me gusta'}
               <span className="count">{likes}</span>
@@ -331,12 +344,13 @@ export default function PostDetail() {
                   ></textarea>
                   <div className="d-flex justify-content-between align-items-center mt-2">
                     <small className="text-muted">{nuevoComentario.length}/{MAX_COMENTARIO}</small>
-                    <button type="submit" className="btn btn-primary btn-sm fw-semibold px-3 rounded-pill d-inline-flex align-items-center gap-2" disabled={!nuevoComentario.trim()}>
+                    <button type="submit" className="btn btn-primary btn-sm fw-semibold px-3 rounded-pill d-inline-flex align-items-center gap-2" disabled={!nuevoComentario.trim() || enviando}>
                       <Send size={15} /> Publicar
                     </button>
                   </div>
                 </div>
               </div>
+              {errorComentario && <div className="alert alert-danger py-2 small mt-3 mb-0" role="alert">{errorComentario}</div>}
             </form>
           ) : (
             <div className="text-center py-4 px-3 mb-4 rounded-3" style={{ background: 'var(--bg)' }}>
@@ -360,7 +374,7 @@ export default function PostDetail() {
                         <span className="fw-semibold text-dark">{c.autor}</span>
                         <span className="text-muted small ms-2">{tiempoRelativo(c.fecha)}</span>
                       </div>
-                      {isAdmin && (
+                      {(isAdmin || (currentUser && c.uid === currentUser.uid)) && (
                         <button onClick={() => handleDeleteComment(c.id)} className="btn btn-sm btn-link text-danger p-0" title="Eliminar comentario" aria-label="Eliminar comentario">
                           <Trash2 size={16} />
                         </button>

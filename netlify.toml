@@ -3,6 +3,15 @@
   function = "inject-meta"
   path = "/post/*"
 
+# sitemap.xml y rss.xml se generan desde Firestore (caché de 1 h en la CDN)
+[[edge_functions]]
+  function = "feeds"
+  path = "/sitemap.xml"
+
+[[edge_functions]]
+  function = "feeds"
+  path = "/rss.xml"
+
 # Los assets de Vite llevan hash en el nombre: se pueden cachear 1 año
 [[headers]]
   for = "/assets/*"

@@ -1,0 +1,38 @@
+rules_version = '2';
+
+// Reglas de Cloud Storage para Azul Mar Caribe.
+// Publicar: firebase deploy --only storage   (o pegar en Firebase Console > Storage > Reglas)
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isAdmin() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email.lower() in [
+          'yamithadresjulio@gmail.com',
+          'xiomysofy24@gmail.com',
+          'delosreyesxiomara75@gmail.com',
+          'linaospina003@gmail.com'
+        ];
+    }
+
+    // Las portadas y videos del blog son públicos
+    match /{allPaths=**} {
+      allow read: if true;
+    }
+
+    match /blog_images/{file} {
+      allow create, update: if isAdmin()
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow delete: if isAdmin();
+    }
+
+    match /blog_videos/{file} {
+      allow create, update: if isAdmin()
+        && request.resource.size < 100 * 1024 * 1024
+        && request.resource.contentType.matches('video/.*');
+      allow delete: if isAdmin();
+    }
+  }
+}

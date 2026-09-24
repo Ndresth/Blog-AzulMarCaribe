@@ -35,7 +35,7 @@ export default function PostCard({ post, compact = false }) {
       <div className="body">
         {compact && <div className="mb-2"><CategoryLabel categoria={post.categoria} /></div>}
         <h3>{post.titulo}</h3>
-        {!compact && <p className="excerpt">{resumen(post.contenido, 180)}</p>}
+        {!compact && resumen(post.contenido, 180) && <p className="excerpt">{resumen(post.contenido, 180)}</p>}
         <PostMeta post={post} showAuthor={!compact} />
       </div>
     </Link>
