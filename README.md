@@ -1,16 +1,38 @@
-# React + Vite
+# Azul Mar Caribe
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Blog de cultura, entretenimiento y noticias de la región Caribe. React 19 + Vite, Firebase (Firestore, Auth, Storage) y despliegue en Netlify.
 
-Currently, two official plugins are available:
+## Desarrollo
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+```bash
+npm install
+npm run dev      # servidor local
+npm run lint     # ESLint
+npm run build    # build de producción en dist/
+```
 
-## React Compiler
+Variables de entorno en `.env` (no se suben al repo):
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+```
+VITE_API_KEY=
+VITE_AUTH_DOMAIN=
+VITE_PROJECT_ID=
+VITE_STORAGE_BUCKET=
+VITE_MESSAGING_SENDER_ID=
+VITE_APP_ID=
+VITE_MEASUREMENT_ID=
+```
 
-## Expanding the ESLint configuration
+## Estructura
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+| Ruta | Qué contiene |
+|------|--------------|
+| `src/config/site.js` | Lista de admins, categorías (color e ícono), imagen de respaldo, formato de fecha |
+| `src/utils/html.js` | Sanitizador de HTML, HTML→texto y conversión de enlaces de YouTube |
+| `src/pages/` | Páginas (inicio, detalle, panel admin, login, etc.) |
+| `src/components/` | Navbar, Footer, `PostCard` (tarjeta de noticia), `PageHero`, editor (`BlogForm`), ticker, botones de compartir |
+| `src/index.css` | Sistema de diseño: colores, tipografía (Inter + Source Serif 4, alojadas en el sitio) y estilos de componentes |
+| `netlify/edge-functions/inject-meta.js` | Inserta título/descripción/imagen de cada noticia en el HTML para Facebook, WhatsApp y X |
+
+- **Agregar un admin:** añadir el correo (en minúsculas) a `ADMIN_EMAILS` en `src/config/site.js`. Las reglas de Firestore también deben permitirlo.
+- **Agregar una categoría:** añadirla a `CATEGORIAS` en `src/config/site.js`; filtros, badges y el editor la toman de ahí.

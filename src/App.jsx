@@ -1,43 +1,47 @@
-import { useEffect, useState } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, Link } from 'react-router-dom';
+import { lazy, Suspense, useEffect, useState } from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { onAuthStateChanged, signOut } from 'firebase/auth'; 
 // IMPORTANTE: Importamos doc y getDoc para buscar el perfil
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from './firebase/config';
-import { ShieldAlert, LogOut, Home } from 'lucide-react';
+import { ShieldAlert, Home } from 'lucide-react';
+import { isAdminEmail } from './config/site';
 import AboutPage from './pages/AboutPage';
 import PrivacyPage from './pages/PrivacyPage';
 
 // Páginas
 import HomePage from './pages/HomePage';
-import AdminPanel from './pages/AdminPanel';
 import LoginPage from './pages/LoginPage';
 import PostDetail from './pages/PostDetail';
 import NotFoundPage from './pages/NotFoundPage';
-import CreateProfile from './pages/CreateProfile';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
+import ScrollToTop from './components/ScrollToTop';
+
+// Carga diferida: el panel y el editor solo se descargan cuando un admin los abre
+const AdminPanel = lazy(() => import('./pages/AdminPanel'));
+const CreateProfile = lazy(() => import('./pages/CreateProfile'));
+
+const Spinner = () => (
+  <div className="d-flex justify-content-center align-items-center vh-100"><div className="spinner-border text-primary"></div></div>
+);
 
 // --- GUARDIÁN INTELIGENTE ---
-const ProtectedRoute = ({ children }) => {
+// requireProfile=false se usa en /create-profile: solo exige ser admin
+const ProtectedRoute = ({ children, requireProfile = true }) => {
   const [status, setStatus] = useState('loading'); 
   const [currentUser, setCurrentUser] = useState(null);
 
   useEffect(() => {
-    // LISTA DE ADMINS
-    const adminsAutorizados = [
-      "yamithadresjulio@gmail.com",
-      "xiomysofy24@gmail.com",
-      "Delosreyesxiomara75@gmail.com",
-      "linaospina003@gmail.com"
-    ];
-
     const unsubscribe = onAuthStateChanged(auth, async (usuarioFirebase) => {
       if (usuarioFirebase) {
         setCurrentUser(usuarioFirebase);
         
-        if (adminsAutorizados.includes(usuarioFirebase.email)) {
-            
+        if (isAdminEmail(usuarioFirebase.email)) {
+            if (!requireProfile) {
+                setStatus('authorized');
+                return;
+            }
             try {
                 // Buscamos si tiene perfil creado
                 const docRef = doc(db, "users", usuarioFirebase.uid);
@@ -64,11 +68,9 @@ const ProtectedRoute = ({ children }) => {
     });
 
     return () => unsubscribe();
-  }, []); 
+  }, [requireProfile]);
 
-  if (status === 'loading') {
-    return <div className="d-flex justify-content-center align-items-center vh-100"><div className="spinner-border text-primary"></div></div>;
-  }
+  if (status === 'loading') return <Spinner />;
 
   if (status === 'guest') return <Navigate to="/login" />;
 
@@ -98,9 +100,11 @@ const ProtectedRoute = ({ children }) => {
 function App() {
   return (
     <BrowserRouter>
+      <ScrollToTop />
       <div className="d-flex flex-column min-vh-100">
         <Navbar /> 
         <div className="flex-grow-1">
+          <Suspense fallback={<Spinner />}>
           <Routes>
             <Route path="/" element={<HomePage />} />
             <Route path="/post/:id" element={<PostDetail />} />
@@ -109,7 +113,11 @@ function App() {
             <Route path="/privacy" element={<PrivacyPage />} />
             
             {/* RUTA PARA CREAR PERFIL */}
-            <Route path="/create-profile" element={<CreateProfile />} />
+            <Route path="/create-profile" element={
+              <ProtectedRoute requireProfile={false}>
+                <CreateProfile />
+              </ProtectedRoute>
+            } />
 
             <Route path="/admin" element={
               <ProtectedRoute>
@@ -119,6 +127,7 @@ function App() {
 
             <Route path="*" element={<NotFoundPage />} />
           </Routes>
+          </Suspense>
         </div>
         <Footer />
       </div>

@@ -1,32 +1,82 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
-import { Waves } from 'lucide-react'; // Ícono de olas para acompañar el texto
+import React, { useState } from 'react';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
+import { Menu, X } from 'lucide-react';
+import { CATEGORIAS, SOCIAL_LINKS } from '../config/site';
+
+const hoy = () => {
+  const t = new Date().toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  return t.charAt(0).toUpperCase() + t.slice(1);
+};
 
 export default function Navbar() {
+  const [open, setOpen] = useState(false);
+  const { pathname } = useLocation();
+  const [searchParams] = useSearchParams();
+  const catActual = pathname === '/' ? searchParams.get('cat') : null;
+
+  const links = [
+    { to: '/', label: 'Portada', active: pathname === '/' && !catActual },
+    ...CATEGORIAS.map((c) => ({ to: `/?cat=${c.value}`, label: c.label, active: catActual === c.value, color: c.color })),
+    { to: '/about', label: 'Quiénes somos', active: pathname === '/about' },
+  ];
+
+  const close = () => setOpen(false);
+
   return (
-    // Navbar Azul Gradiente
-    <nav className="navbar navbar-expand-lg navbar-dark shadow-lg sticky-top" 
-         style={{background: 'linear-gradient(90deg, #005f99 0%, #00a8cc 100%)'}}>
-      <div className="container">
-        
-        {/* LOGO Y NOMBRE (Clic lleva al inicio) */}
-        <Link className="navbar-brand d-flex align-items-center gap-3" to="/">
-          
-          {/* Tu imagen de logo */}
-          <div className="bg-white rounded-pill px-2 py-1 shadow-sm d-flex align-items-center">
-             <img src="/logo.png" alt="Logo" height="45" />
+    <>
+      <a href="#contenido" className="visually-hidden-focusable">Saltar al contenido</a>
+
+      <div className="topbar d-none d-md-block">
+        <div className="container d-flex justify-content-between align-items-center py-2">
+          <span>{hoy()}</span>
+          <div className="d-flex align-items-center gap-3">
+            {SOCIAL_LINKS.map((s) => (
+              <a key={s.name} href={s.href} target="_blank" rel="noopener noreferrer" aria-label={s.name} title={s.name}>
+                <s.Icon size={15} />
+              </a>
+            ))}
           </div>
-
-          {/* Texto con Ícono de Lucide */}
-          <span className="fw-bold text-white d-flex align-items-center gap-2" style={{letterSpacing: '1px', textShadow: '0 2px 4px rgba(0,0,0,0.3)'}}>
-            <Waves size={24} /> {/* Ícono vectorial en vez de emoji */}
-            AZUL MAR CARIBE
-          </span>
-        </Link>
-
-        {/* Sin botones de Admin (Público general) */}
-        
+        </div>
       </div>
-    </nav>
+
+      <header className="site-header">
+        <div className="container">
+          <div className="d-flex align-items-center justify-content-between py-2 flex-wrap">
+            <Link className="brand d-flex align-items-center py-1" to="/" onClick={close} aria-label="Azul Mar Caribe - Inicio">
+              <img src="/logo-sm.png" alt="Azul Mar Caribe" width="122" height="54" />
+            </Link>
+
+            <button
+              className="nav-toggle d-lg-none"
+              onClick={() => setOpen((o) => !o)}
+              aria-expanded={open}
+              aria-controls="main-nav"
+              aria-label={open ? 'Cerrar menú' : 'Abrir menú'}
+            >
+              {open ? <X size={22} /> : <Menu size={22} />}
+            </button>
+
+            <nav
+              id="main-nav"
+              className={`main-nav d-lg-flex align-items-center ${open ? 'd-flex' : 'd-none'}`}
+              aria-label="Secciones"
+            >
+              {links.map((l) => (
+                <Link
+                  key={l.to}
+                  to={l.to}
+                  onClick={close}
+                  className={`nav-link${l.active ? ' active' : ''}`}
+                  style={l.color ? { '--nav-color': l.color } : undefined}
+                  aria-current={l.active ? 'page' : undefined}
+                >
+                  {l.label}
+                </Link>
+              ))}
+            </nav>
+          </div>
+        </div>
+      </header>
+    </>
   );
 }

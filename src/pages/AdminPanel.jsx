@@ -4,6 +4,7 @@ import { signOut } from 'firebase/auth';
 import { useNavigate } from 'react-router-dom';
 import { collection, getDocs, deleteDoc, doc, query, orderBy } from 'firebase/firestore';
 import BlogForm from '../components/BlogForm';
+import { getBadgeClass, handleImageError } from '../config/site';
 // Importamos los íconos de Lucide
 import { 
   Gauge, Eye, LogOut, BookOpen, PenTool, MessageSquare, 
@@ -67,9 +68,15 @@ export default function AdminPanel() {
   // Comentarios
   const loadComments = async (postId) => {
     setViewingComments(postId);
-    const ref = collection(db, "posts", postId, "comments");
-    const snap = await getDocs(ref);
-    setCommentsList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    setCommentsList([]);
+    try {
+      const q = query(collection(db, "posts", postId, "comments"), orderBy("fecha", "desc"));
+      const snap = await getDocs(q);
+      setCommentsList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    } catch (error) {
+      console.error(error);
+      showToast("Error cargando comentarios", "error");
+    }
   };
 
   const handleDeleteComment = (id) => {
@@ -105,13 +112,13 @@ export default function AdminPanel() {
             <h2 className="mb-0 text-primary fw-bold d-flex align-items-center gap-2">
                 <Gauge size={28} /> Panel de Control
             </h2>
-            <small className="text-muted">Bienvenido, Admin</small>
+            <small className="text-muted">Bienvenido, {auth.currentUser?.displayName || 'Admin'}</small>
         </div>
         <div className="d-flex gap-2">
             <button className="btn btn-outline-secondary d-flex align-items-center gap-2" onClick={() => navigate('/')}>
                 <Eye size={18} /> Ver Blog
             </button>
-            <button className="btn btn-danger d-flex align-items-center gap-2" onClick={() => { signOut(auth); navigate('/'); }}>
+            <button className="btn btn-danger d-flex align-items-center gap-2" onClick={async () => { await signOut(auth); navigate('/'); }}>
                 <LogOut size={18} /> Cerrar Sesión
             </button>
         </div>
@@ -178,11 +185,11 @@ export default function AdminPanel() {
                             {posts.map(post => (
                                 <div key={post.id} className="list-group-item p-3 d-flex justify-content-between align-items-center hover-effect border-bottom">
                                     <div className="d-flex align-items-center gap-3">
-                                        <img src={post.imagen} alt="img" className="rounded shadow-sm" style={{width:'60px', height:'60px', objectFit:'cover'}} onError={(e) => e.target.src = "https://via.placeholder.com/60"} />
+                                        <img src={post.imagen} alt="img" className="rounded shadow-sm" style={{width:'60px', height:'60px', objectFit:'cover'}} onError={handleImageError} />
                                         <div>
                                             <h6 className="mb-1 fw-bold text-dark">{post.titulo}</h6>
                                             <div className="d-flex gap-2">
-                                                <span className={`badge ${post.categoria === 'Cultural' ? 'bg-info' : 'bg-warning text-dark'}`}>{post.categoria}</span>
+                                                <span className={`badge ${getBadgeClass(post.categoria)}`}>{post.categoria}</span>
                                                 <small className="text-muted">{post.fecha ? new Date(post.fecha).toLocaleDateString() : '-'}</small>
                                             </div>
                                         </div>
@@ -215,7 +222,7 @@ export default function AdminPanel() {
                     onPostCreated={handlePostSuccess} 
                     postToEdit={editingPost}
                     onCancel={handleCancelEdit}
-                    onNotify={showToast} 
+                    onNotify={(msg) => showToast(msg, msg.startsWith('❌') ? 'error' : 'success')} 
                 />
             </div>
         </div>

@@ -2,7 +2,6 @@
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
-import { getStorage } from "firebase/storage";
 
 // Configuración usando las variables de entorno (Seguridad)
 const firebaseConfig = {
@@ -16,9 +15,9 @@ const firebaseConfig = {
 };
 
 // 1. Inicializar Firebase
-const app = initializeApp(firebaseConfig);
+export const app = initializeApp(firebaseConfig);
 
 // 2. Exportar las herramientas que usaremos en la app
 export const db = getFirestore(app);   // Base de Datos
 export const auth = getAuth(app);      // Login de Admin
-export const storage = getStorage(app); // Fotos
+// Storage (fotos/videos) se inicializa en BlogForm para no cargarlo en el blog público
