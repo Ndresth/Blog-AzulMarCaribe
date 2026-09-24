@@ -16,6 +16,7 @@ import NotFoundPage from './pages/NotFoundPage';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import ScrollToTop from './components/ScrollToTop';
+import PautaModal from './components/PautaModal';
 
 // Carga diferida: el panel y el editor solo se descargan cuando un admin los abre
 const AdminPanel = lazy(() => import('./pages/AdminPanel'));
@@ -115,6 +116,7 @@ function Layout({ children }) {
       <Navbar />
       <div className="flex-grow-1">{children}</div>
       <Footer />
+      <PautaModal />
     </div>
   );
 }

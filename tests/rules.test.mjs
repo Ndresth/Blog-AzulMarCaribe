@@ -86,6 +86,19 @@ await t('admin lee su perfil', getDoc(doc(fs_(admin), 'users/admin1')), true);
 await t('admin no lee perfil ajeno', getDoc(doc(fs_(admin), 'users/otro')), false);
 await t('lector no crea perfil', setDoc(doc(fs_(user), 'users/u1'), { nombre: 'x' }), false);
 
+console.log('PAUTA');
+const pauta = { activa: true, imagen: 'https://firebasestorage.googleapis.com/x.jpg', enlace: 'https://tienda.com', actualizado: Date.now() };
+await t('anónimo lee la pauta', getDoc(doc(fs_(anon), 'config/pauta')), true);
+await t('admin publica pauta', setDoc(doc(fs_(admin), 'config/pauta'), pauta), true);
+await t('admin publica pauta sin enlace', setDoc(doc(fs_(admin), 'config/pauta'), { ...pauta, enlace: '' }), true);
+await t('lector no publica pauta', setDoc(doc(fs_(user), 'config/pauta'), pauta), false);
+await t('pauta con enlace javascript: rechazada', setDoc(doc(fs_(admin), 'config/pauta'), { ...pauta, enlace: 'javascript:alert(1)' }), false);
+await t('pauta con campos extra rechazada', setDoc(doc(fs_(admin), 'config/pauta'), { ...pauta, otro: 1 }), false);
+await t('admin desactiva pauta', updateDoc(doc(fs_(admin), 'config/pauta'), { activa: false, actualizado: Date.now() }), true);
+await t('lector no borra pauta', deleteDoc(doc(fs_(user), 'config/pauta')), false);
+await t('admin borra pauta', deleteDoc(doc(fs_(admin), 'config/pauta')), true);
+await t('lector no escribe otros config', setDoc(doc(fs_(user), 'config/otra'), { a: 1 }), false);
+
 console.log('STORAGE');
 const st = (c) => c.storage();
 await t('anónimo lee archivo antiguo', getBytes(ref(st(anon), 'otra_carpeta/vieja.jpg')), true);
@@ -98,6 +111,10 @@ await t('admin sube video', uploadBytes(ref(st(admin), 'blog_videos/v.mp4'), new
 await t('admin no sube fuera de las carpetas del blog', uploadBytes(ref(st(admin), 'otra/x.jpg'), new Uint8Array(10), { contentType: 'image/jpeg' }), false);
 await t('lector no borra imagen', deleteObject(ref(st(user), 'blog_images/a.jpg')), false);
 await t('admin borra imagen', deleteObject(ref(st(admin), 'blog_images/a.jpg')), true);
+await t('admin sube imagen de pauta', uploadBytes(ref(st(admin), 'blog_pautas/p.webp'), new Uint8Array(512), { contentType: 'image/webp' }), true);
+await t('lector no sube pauta', uploadBytes(ref(st(user), 'blog_pautas/p2.webp'), new Uint8Array(512), { contentType: 'image/webp' }), false);
+await t('admin no sube video como pauta', uploadBytes(ref(st(admin), 'blog_pautas/v.mp4'), new Uint8Array(512), { contentType: 'video/mp4' }), false);
+await t('admin borra imagen de pauta', deleteObject(ref(st(admin), 'blog_pautas/p.webp')), true);
 
 console.log(`\n${ok} pasaron, ${bad} fallaron`);
 await env.cleanup();
