@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { db } from '../firebase/config';
 import { collection, getDocs, orderBy, query, limit, startAfter, where } from 'firebase/firestore';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -8,11 +8,14 @@ import PostSkeleton from '../components/PostSkeleton';
 import NewsTicker from '../components/NewsTicker';
 import PostCard, { CategoryLabel, PostMeta } from '../components/PostCard';
 import { CATEGORIAS, getCategoria, handleImageError, FALLBACK_IMAGE } from '../config/site';
-import { resumen } from '../utils/html';
+import { resumen, htmlToText } from '../utils/html';
 
 // Primera carga: 1 destacada + 3 laterales + 6 en la grilla. Luego de a 9 (3 filas de 3).
 const PRIMERA_PAGINA = 10;
 const SIGUIENTES = 9;
+
+// Búsqueda sin distinguir mayúsculas ni tildes ("musica" encuentra "Música")
+const normalizar = (t) => (t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
 const construirQuery = (categoria, cantidad, despuesDe) => {
   const filtros = [];
@@ -60,6 +63,10 @@ export default function HomePage() {
   const [ultimoDoc, setUltimoDoc] = useState(null);
   const [hayMas, setHayMas] = useState(true);
 
+  // Para buscar se cargan TODAS las noticias una sola vez (la portada solo trae las más recientes)
+  const [todas, setTodas] = useState(null);
+  const [cargandoTodas, setCargandoTodas] = useState(false);
+
   const [searchParams, setSearchParams] = useSearchParams();
   const categoriaActual = searchParams.get('cat') || 'Todas';
   const categoriaInfo = getCategoria(categoriaActual);
@@ -102,14 +109,48 @@ export default function HomePage() {
     }
   };
 
-  // Búsqueda sin distinguir mayúsculas ni tildes ("musica" encuentra "Música")
-  const normalizar = (t) => (t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const cargarTodas = async () => {
+    if (todas || cargandoTodas) return;
+    setCargandoTodas(true);
+    try {
+      const snapshot = await getDocs(query(collection(db, "posts"), orderBy("fecha", "desc")));
+      setTodas(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    } catch (error) {
+      console.error("Error cargando noticias para buscar:", error);
+    } finally {
+      setCargandoTodas(false);
+    }
+  };
+
+  const onBuscar = (valor) => {
+    setBusqueda(valor);
+    if (valor.trim()) cargarTodas();
+  };
+
+  // Índice de búsqueda: título, texto y autor normalizados (se calcula una vez)
+  const indice = useMemo(() => (todas || []).map((post) => ({
+    post,
+    titulo: normalizar(post.titulo),
+    resto: normalizar(`${htmlToText(post.contenido)} ${post.autor || ''}`),
+  })), [todas]);
+
   const termino = normalizar(busqueda.trim());
   const buscando = termino.length > 0;
 
-  const noticiasFiltradas = buscando
-    ? noticias.filter((nota) => normalizar(nota.titulo).includes(termino))
-    : noticias;
+  let noticiasFiltradas = noticias;
+  if (buscando) {
+    const palabras = termino.split(/\s+/);
+    const coincide = (texto) => palabras.every((p) => texto.includes(p));
+    const fuente = todas
+      ? indice
+      : noticias.map((post) => ({ post, titulo: normalizar(post.titulo), resto: '' }));
+    const enSeccion = fuente.filter(({ post }) => categoriaActual === 'Todas' || post.categoria === categoriaActual);
+    // Primero las que coinciden en el título, luego las que coinciden en el texto
+    noticiasFiltradas = [
+      ...enSeccion.filter((x) => coincide(x.titulo)),
+      ...enSeccion.filter((x) => !coincide(x.titulo) && coincide(`${x.titulo} ${x.resto}`)),
+    ].map((x) => x.post);
+  }
 
   // Portada: destacada + laterales (solo cuando no se está buscando)
   const destacada = !buscando ? noticiasFiltradas[0] : null;
@@ -147,9 +188,9 @@ export default function HomePage() {
             <input
               type="search"
               placeholder="Buscar noticias…"
-              aria-label="Buscar noticias por título"
+              aria-label="Buscar noticias"
               value={busqueda}
-              onChange={(e) => setBusqueda(e.target.value)}
+              onChange={(e) => onBuscar(e.target.value)}
             />
           </div>
         </div>
@@ -171,7 +212,7 @@ export default function HomePage() {
           ))}
         </div>
 
-        {loading ? (
+        {loading || (buscando && cargandoTodas) ? (
           <div className="row g-4">
             {[1, 2, 3, 4, 5, 6].map((n) => <PostSkeleton key={n} />)}
           </div>
@@ -183,7 +224,7 @@ export default function HomePage() {
                 <h2 className="h5 text-dark">No encontramos noticias</h2>
                 <p className="mb-0">
                   {buscando
-                    ? (hayMas ? 'La búsqueda revisa las noticias cargadas. Prueba con "Cargar más noticias".' : 'Prueba con otras palabras.')
+                    ? (categoriaInfo ? `No hay resultados en ${categoriaInfo.label}. Prueba en "Todas" o con otras palabras.` : 'Prueba con otras palabras.')
                     : 'Aún no hay publicaciones en esta sección.'}
                 </p>
               </div>
@@ -223,7 +264,7 @@ export default function HomePage() {
             )}
 
             {/* CARGAR MÁS */}
-            {hayMas && noticias.length > 0 && (
+            {hayMas && !buscando && noticias.length > 0 && (
               <div className="text-center mt-5">
                 <button onClick={cargarMasNoticias} className="btn-load-more d-inline-flex align-items-center gap-2" disabled={loadingMore}>
                   {loadingMore ? <span className="spinner-border spinner-border-sm" /> : <ArrowDown size={18} />}
