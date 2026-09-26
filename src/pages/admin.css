@@ -32,7 +32,7 @@
   text-decoration: none;
 }
 .admin-sidebar .brand img {
-  height: 40px;
+  height: 44px;
   width: auto;
   border-radius: 8px;
 }
@@ -510,7 +510,7 @@
   box-shadow: 0 40px 80px -30px rgba(0, 0, 0, .5);
   text-align: center;
 }
-.auth-card .logo { height: 80px; border-radius: 12px; margin-bottom: 1.25rem; }
+.auth-card .logo { height: 110px; border-radius: 12px; margin-bottom: 1.25rem; }
 .auth-card h1 { color: var(--ink); }
 .google-btn {
   display: flex;
