@@ -30,10 +30,10 @@ export const getCategoriaColor = (value) => getCategoria(value)?.color || '#0369
 export const CONTACT_EMAIL = 'xiomysofy24@gmail.com';
 
 export const SOCIAL_LINKS = [
-  { name: 'Facebook', href: 'https://www.facebook.com/xiomysofy.dlosreyes', Icon: Facebook },
-  { name: 'Instagram', href: 'https://www.instagram.com/azulmarcaribe.link', Icon: Instagram },
+  { name: 'Facebook', href: 'https://www.facebook.com/share/1Jn3LB9nsq/', Icon: Facebook },
+  { name: 'Instagram', href: 'https://www.instagram.com/azulmarcaribe_amc', Icon: Instagram },
   { name: 'X (Twitter)', href: 'https://x.com/xiomysofy', Icon: Twitter },
-  { name: 'YouTube', href: 'https://youtube.com/@zulmarcaribe', Icon: Youtube },
+  { name: 'YouTube', href: 'https://www.youtube.com/@zulMarCaribeComunicacion', Icon: Youtube },
 ];
 
 export const getCategoria = (value) => CATEGORIAS.find((c) => c.value === value);
