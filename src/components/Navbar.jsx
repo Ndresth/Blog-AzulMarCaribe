@@ -43,7 +43,7 @@ export default function Navbar() {
         <div className="container">
           <div className="d-flex align-items-center justify-content-between py-2 flex-wrap">
             <Link className="brand d-flex align-items-center py-1" to="/" onClick={close} aria-label="Azul Mar Caribe - Inicio">
-              <img src="/logo-sm.png" alt="Azul Mar Caribe" width="122" height="54" />
+              <img src="/logo-sm.png" alt="Azul Mar Caribe" width="134" height="54" />
             </Link>
 
             <button
