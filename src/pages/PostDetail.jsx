@@ -11,7 +11,7 @@ import { Helmet } from 'react-helmet-async';
 import ShareButtons from '../components/ShareButtons';
 import PostCard from '../components/PostCard';
 import { ChevronRight, MessageSquare, Send, Trash2, Heart, LogIn, Clock, Compass } from 'lucide-react';
-import { isAdminEmail, getCategoriaColor, handleImageError, formatearFecha, tiempoRelativo, iniciales, SITE_URL, FALLBACK_IMAGE } from '../config/site';
+import { isAdminEmail, getCategoriaColor, handleImageError, formatearFecha, tiempoRelativo, iniciales, SITE_URL } from '../config/site';
 import { sanitizeHtml, htmlToText, getYouTubeEmbedUrl, tiempoLectura } from '../utils/html';
 
 // Barra fina que indica cuánto del artículo se ha leído
@@ -198,7 +198,7 @@ export default function PostDetail() {
 
   const seoTitle = htmlToText(post.titulo);
   const seoDesc = htmlToText(post.contenido).substring(0, 160) || `${seoTitle} - Azul Mar Caribe`;
-  const seoImage = post.imagen || `${SITE_URL}${FALLBACK_IMAGE}`;
+  const seoImage = post.imagen || `${SITE_URL}/og-image.jpg`;
   const canonicalUrl = `${SITE_URL}/post/${id}`;
   const youtubeEmbed = post.videoUrl ? getYouTubeEmbedUrl(post.videoUrl) : null;
   const autor = post.autor || 'Redacción';

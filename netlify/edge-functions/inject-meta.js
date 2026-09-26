@@ -1,6 +1,7 @@
 import { getPost, toPlainText, SITE_URL } from "../shared/firestore.js";
 
-const DEFAULT_IMAGE = `${SITE_URL}/logo.png`;
+const DEFAULT_IMAGE = `${SITE_URL}/og-image.jpg`;
+const LOGO = `${SITE_URL}/logo.png`;
 
 // Escapa texto para usarlo dentro de atributos/etiquetas HTML
 const escapeHtml = (str) =>
@@ -51,7 +52,7 @@ export default async (request, context) => {
       publisher: {
         "@type": "Organization",
         name: "Azul Mar Caribe",
-        logo: { "@type": "ImageObject", url: DEFAULT_IMAGE },
+        logo: { "@type": "ImageObject", url: LOGO },
       },
       mainEntityOfPage: canonicalUrl,
     };
